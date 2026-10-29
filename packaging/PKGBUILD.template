@@ -1,32 +1,43 @@
 pkgname=mirivue-kde
-pkgver=1.0.0rc195
+pkgver=@PKGVER@
 pkgrel=1
 pkgdesc='Gestionnaire de fichiers orienté médias pour KDE Plasma'
 arch=('x86_64')
-url='https://local.invalid/mirivue'
-license=('GPL-3.0-or-later' 'MIT' 'GPL-2.0-or-later' 'BSD-2-Clause')
+url='https://github.com/denamiel/Mirivue-kde'
+license=('GPL-3.0-or-later' 'MIT' 'GPL-2.0-or-later' 'BSD-2-Clause' 'CC0-1.0')
 depends=(
   'python>=3.11' 'python<3.15' 'pyside6>=6.8' 'pyside6<7' 'qt6-base' 'qt6-multimedia' 'qt6-webengine'
   'python-pillow' 'python-mutagen' 'shiboken6' 'ffmpeg' 'mediainfo'
-  'ark' '7zip' 'unrar' 'perl-image-exiftool' 'mkvtoolnix-cli' 'kio' 'kservice' 'kiconthemes' 'kxmlgui' 'kconfigwidgets' 'kcolorscheme' 'knewstuff' 'kcoreaddons' 'kwindowsystem' 'kparts' 'kguiaddons' 'kwidgetsaddons' 'ktextwidgets' 'ki18n'
+  'kdialog' 'appstream' 'ark' '7zip' 'unrar' 'perl-image-exiftool' 'mkvtoolnix-cli' 'kio' 'kservice' 'kiconthemes' 'kxmlgui' 'kconfigwidgets' 'kcolorscheme' 'knewstuff' 'kcoreaddons' 'kwindowsystem' 'kparts' 'kguiaddons' 'kwidgetsaddons' 'ktextwidgets' 'ki18n'
 )
 makedepends=('cmake' 'ninja' 'extra-cmake-modules')
+checkdepends=('desktop-file-utils')
 optdepends=('konsole: panneau Terminal intégré')
 conflicts=('mirivue-kde-bin')
 provides=('mirivue-kde-bin')
-source=('Mirivue-1.0.0-RC195-KDE.tar.gz')
+source=('mirivue-source.tar.gz')
 sha256sums=('@SOURCE_SHA256@')
 
 build() {
-  local root="$srcdir/Mirivue-1.0.0-RC195-KDE"
+  local root="$srcdir/mirivue-source"
   cmake -S "$root/native" -B "$srcdir/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build "$srcdir/build"
 }
 
+check() {
+  python -m compileall -q "$srcdir/mirivue-source/mirivue"
+  for helper in mirivue-kio-service mirivue-kio-list; do
+    test -x "$srcdir/build/$helper"
+    if ldd "$srcdir/build/$helper" | grep -q 'not found'; then
+      return 1
+    fi
+  done
+}
+
 package() {
-  local root="$srcdir/Mirivue-1.0.0-RC195-KDE"
+  local root="$srcdir/mirivue-source"
   local helpers=(
     mirivue-job-progress
     mirivue-kio-list
@@ -68,6 +79,12 @@ package() {
     "$pkgdir/usr/share/icons/hicolor/256x256/apps/org.pdenams.Mirivue.Qt.png"
   install -m 0644 "$root/mirivue/icons/mirivue.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.pdenams.Mirivue.Qt.svg"
+  install -Dm0644 "$root/packaging/org.pdenams.Mirivue.Qt.metainfo.xml" "$pkgdir/usr/share/metainfo/org.pdenams.Mirivue.Qt.metainfo.xml"
+  install -Dm0644 "$root/packaging/mirivue-local.xml" "$pkgdir/usr/share/swcatalog/xml/mirivue-local.xml"
+  cp -a "$root/packaging/preuves-kde" "$pkgdir/usr/share/licenses/$pkgname/"
+  install -m0644 "$root/mirivue/icons/NOTICE.md" "$pkgdir/usr/share/licenses/$pkgname/NOTICE-ICONES.md"
+  install -d "$pkgdir/usr/share/licenses/$pkgname/notices-kde"
+  cp "$root/native/dolphin-engine/settings/"*.license "$root/mirivue/servicemenu.knsrc.license" "$pkgdir/usr/share/licenses/$pkgname/notices-kde/"
   cat > "$pkgdir/usr/share/applications/org.pdenams.Mirivue.Qt.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
@@ -85,4 +102,5 @@ Categories=Qt;KDE;System;FileTools;FileManager;
 MimeType=inode/directory;
 Keywords=media;video;audio;image;files;
 EOF
+  desktop-file-validate "$pkgdir/usr/share/applications/org.pdenams.Mirivue.Qt.desktop"
 }

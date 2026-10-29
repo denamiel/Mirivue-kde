@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-output_dir="$source_dir"
+if (( EUID == 0 )); then
+  printf '%s\n' 'Lancez ce script avec votre compte utilisateur, sans sudo.' >&2
+  exit 1
+fi
+command -v makepkg >/dev/null || { echo 'Installez base-devel pour obtenir makepkg.' >&2; exit 1; }
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/mirivue-package-XXXXXXXX")"
 trap 'rm -rf -- "$build_dir"' EXIT
-
-if ! command -v makepkg >/dev/null 2>&1; then
-  printf '%s\n' 'makepkg est absent. Installez le groupe base-devel puis recommencez.' >&2
-  exit 1
-fi
-for command in cmake ninja; do
-  if ! command -v "$command" >/dev/null 2>&1; then
-    printf 'Outil de construction absent : %s. Installez cmake, ninja et extra-cmake-modules puis recommencez.\n' "$command" >&2
-    exit 1
-  fi
-done
-
-archive="$build_dir/Mirivue-1.0.0-RC194-KDE.tar.gz"
-tar -C "$source_dir/.." \
-  --exclude='Mirivue-1.0.0-RC194-KDE/tests' \
-  --exclude='*.pkg.tar.*' --exclude='*.zip' \
-  --exclude='*/__pycache__' --exclude='*.pyc' \
-  -czf "$archive" Mirivue-1.0.0-RC194-KDE
+version="$(python - "$source_dir/mirivue/__init__.py" <<'PY'
+import ast, pathlib, re, sys
+module = ast.parse(pathlib.Path(sys.argv[1]).read_text())
+version = next(ast.literal_eval(n.value) for n in module.body
+               if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__version__" for t in n.targets))
+if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[0-9]+)?", version):
+    raise SystemExit("Version non prise en charge : " + version)
+print(version.replace("-", "").replace("beta.", "beta").replace("alpha.", "alpha").replace("rc.", "rc"))
+PY
+)"
+archive="$build_dir/mirivue-source.tar.gz"
+tar -C "$source_dir" --exclude='./.git' --exclude='./.github' \
+  --exclude='./build' --exclude='./src' --exclude='./pkg' \
+  --exclude='*.pkg.tar.*' --exclude='*.zip' --exclude='__pycache__' --exclude='*.pyc' \
+  --transform='s,^\.,mirivue-source,' -czf "$archive" .
 checksum="$(sha256sum "$archive" | cut -d' ' -f1)"
-sed "s/@SOURCE_SHA256@/$checksum/" "$source_dir/packaging/PKGBUILD.template" > "$build_dir/PKGBUILD"
-(cd "$build_dir" && makepkg --clean --force)
-package="$(find "$build_dir" -maxdepth 1 -name 'mirivue-kde-*.pkg.tar.*' -print -quit)"
-if [[ -z "$package" ]]; then
-  printf '%s\n' 'Le paquet n’a pas été produit.' >&2
-  exit 1
-fi
-cp -f -- "$package" "$output_dir/"
-printf 'Paquet créé : %s/%s\n' "$output_dir" "$(basename -- "$package")"
+sed -e "s/@SOURCE_SHA256@/$checksum/" -e "s/@PKGVER@/$version/" \
+  "$source_dir/packaging/PKGBUILD.template" > "$build_dir/PKGBUILD"
+(cd "$build_dir" && makepkg --clean --force --syncdeps)
+mapfile -t packages < <(cd "$build_dir" && makepkg --packagelist)
+for package in "${packages[@]}"; do
+  test -f "$package"
+  cp -- "$package" "$source_dir/"
+  printf 'Paquet créé : %s/%s\n' "$source_dir" "$(basename -- "$package")"
+done

@@ -1,0 +1,55 @@
+name: Paquet CachyOS et Arch Linux
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Préparer Arch Linux
+        run: |
+          pacman -Syu --noconfirm --needed git sudo python
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
+          chmod 440 /etc/sudoers.d/builder
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Copier les sources et construire sans privilèges
+        run: |
+          cp -a "$GITHUB_WORKSPACE" /home/builder/source
+          chown -R builder:builder /home/builder/source
+          su builder -c 'cd /home/builder/source && bash Construire-paquet-CachyOS.sh'
+          mkdir -p dist
+          cp /home/builder/source/*.pkg.tar.zst dist/
+          cd dist
+          sha256sum *.pkg.tar.zst > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mirivue-kde-arch-x86_64
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mirivue-kde-arch-x86_64
+          path: dist
+      - name: Joindre le paquet à la publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/* --clobber

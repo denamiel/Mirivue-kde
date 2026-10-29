@@ -1,7 +1,7 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version de développement : **1.0.0-rc195**.
+Version de développement : **1.0.0-beta.1**.
 
 ## Installer sur Fedora 44 x86_64
 
@@ -20,6 +20,22 @@ sudo dnf upgrade --refresh mirivue-kde
 ```
 
 COPR est un dépôt communautaire distinct des dépôts officiels Fedora.
+
+## Installer sur CachyOS / Arch Linux
+
+Les paquets sont construits par [GitHub Actions](https://github.com/denamiel/Mirivue-kde/actions/workflows/arch-package.yml).
+Téléchargez l'artefact de la dernière construction réussie et extrayez le ZIP,
+ou utilisez le paquet joint à une [publication](https://github.com/denamiel/Mirivue-kde/releases).
+
+Dans le dossier du paquet, après avoir fermé Mirivue :
+
+```bash
+sha256sum -c SHA256SUMS
+sudo pacman -U ./mirivue-kde-*.pkg.tar.zst
+```
+
+Les mises à jour CachyOS nécessitent de télécharger et installer le nouveau paquet.
+Voir [le guide des deux distributions](packaging/README.md).
 
 ## Fonctions
 
