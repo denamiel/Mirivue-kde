@@ -1,0 +1,7 @@
+{
+  "repository": "https://invent.kde.org/system/dolphin",
+  "tag": "v26.08.2",
+  "source": "src/kitemviews/kfileitemmodel.cpp",
+  "function": "KFileItemModel::timeRoleGroups",
+  "changes": "Qt datetime list replaces KFileItemModel row callback; no tree children; logging uses qWarning; grouping and translations otherwise retained"
+}

@@ -1,0 +1,20 @@
+Mirivue KDE — distribution combinée
+
+SPDX-License-Identifier: GPL-3.0-or-later
+
+La distribution combinée de Mirivue KDE est proposée sous la GNU GPL,
+version 3 ou toute version ultérieure. Le texte figure dans
+LICENSES/GPL-3.0-or-later.txt. Les sources correspondantes, les adaptations
+et les scripts de construction sont inclus dans l’archive.
+
+Les parties originales précédemment proposées sous MIT conservent cette
+licence et les droits déjà accordés (LICENSES/MIT.txt). Les composants KDE
+et les adaptations de leur code conservent leurs auteurs et licences
+propres, notamment GPL-2.0-or-later et BSD-2-Clause.
+
+Cette déclaration ne requalifie pas les bibliothèques Qt/KF6 installées
+séparément. Voir LICENCES-TIERS.md et les mentions des fichiers concernés.
+
+Le code original de Mirivue identifié comme tel reste également disponible sous MIT
+(voir LICENSES/MIT.txt). Cette permission ne s’étend pas aux sources ni aux
+adaptations de Dolphin, qui conservent leurs mentions et licences propres.

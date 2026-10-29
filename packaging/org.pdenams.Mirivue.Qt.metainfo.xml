@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Mirivue contributors -->
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>org.pdenams.Mirivue.Qt</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Mirivue KDE</name>
+  <summary>Browse, organise and analyse multimedia files</summary>
+  <summary xml:lang="fr">Parcourir, organiser et analyser les fichiers multimédias</summary>
+  <developer id="org.pdenams"><name>Pascal Denamiel</name></developer>
+  <description>
+    <p>Mirivue is a dual-pane file manager for KDE Plasma with multimedia previews, metadata analysis and native KIO file operations.</p>
+    <p xml:lang="fr">Mirivue est un gestionnaire de fichiers à deux panneaux pour KDE Plasma, avec aperçus multimédias, analyse des métadonnées et opérations de fichiers natives KIO.</p>
+  </description>
+  <launchable type="desktop-id">org.pdenams.Mirivue.Qt.desktop</launchable>
+  <provides><binary>mirivue-kde</binary><mediatype>inode/directory</mediatype></provides>
+  <categories><category>System</category><category>FileManager</category></categories>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="1.0.0-rc195" date="2026-10-29" type="development"><description><p>Add AppStream metadata and local RPM catalog integration.</p></description></release></releases>
+</component>

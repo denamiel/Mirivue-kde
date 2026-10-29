@@ -1,0 +1,116 @@
+{
+  "environment": {
+    "python": "3.12.14",
+    "qt": "6.12.0",
+    "style": "Fusion",
+    "platform": "offscreen",
+    "sequential_runs": true
+  },
+  "measurements": [
+    {
+      "version": "1.0.0-rc160",
+      "columns": 6,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 21.591,
+      "p95_ms": 26.23,
+      "max_ms": 33.004,
+      "profiled_steps": 80,
+      "source_calls": {
+        "data": 135464,
+        "headerData": 9212,
+        "flags": 19352,
+        "rowCount": 164028,
+        "columnCount": 164028
+      },
+      "native": false
+    },
+    {
+      "version": "1.0.0-rc161",
+      "columns": 6,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 18.975,
+      "p95_ms": 22.636,
+      "max_ms": 26.783,
+      "profiled_steps": 80,
+      "source_calls": {
+        "data": 135464,
+        "headerData": 9212,
+        "flags": 19352,
+        "rowCount": 164028,
+        "columnCount": 164028
+      },
+      "native": false
+    },
+    {
+      "version": "1.0.0-rc162",
+      "columns": 6,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 9.459,
+      "p95_ms": 12.512,
+      "max_ms": 17.706,
+      "profiled_steps": 80,
+      "source_calls": {
+        "flags": 4054,
+        "rowCount": 4054,
+        "columnCount": 4054
+      },
+      "native": true
+    },
+    {
+      "version": "1.0.0-rc162",
+      "columns": 6,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 18.291,
+      "p95_ms": 21.547,
+      "max_ms": 27.584,
+      "profiled_steps": 80,
+      "source_calls": {
+        "flags": 19424,
+        "headerData": 9212,
+        "data": 135968,
+        "rowCount": 164604,
+        "columnCount": 164604
+      },
+      "native": false,
+      "control": "RC162, identical native header, presentation cache disabled"
+    },
+    {
+      "version": "1.0.0-rc160",
+      "columns": 38,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 22.271,
+      "p95_ms": 31.979,
+      "max_ms": 76.755,
+      "profiled_steps": 80,
+      "source_calls": {
+        "flags": 21250,
+        "headerData": 29630,
+        "data": 148750,
+        "rowCount": 199630,
+        "columnCount": 199630
+      },
+      "native": false
+    },
+    {
+      "version": "1.0.0-rc162",
+      "columns": 38,
+      "rows_per_pane": 120,
+      "steps": 180,
+      "median_ms": 9.839,
+      "p95_ms": 13.302,
+      "max_ms": 15.319,
+      "profiled_steps": 80,
+      "source_calls": {
+        "flags": 4000,
+        "rowCount": 4000,
+        "columnCount": 4000
+      },
+      "native": true
+    }
+  ]
+}

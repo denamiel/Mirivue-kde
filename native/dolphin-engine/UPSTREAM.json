@@ -1,0 +1,248 @@
+{
+  "repository": "https://invent.kde.org/system/dolphin",
+  "version": "26.08.2",
+  "tag": "v26.08.2",
+  "files": [
+    {
+      "path": "kitemviews/kitemlistview.h",
+      "upstream_sha256": "f4197d44b80582553949373f95368d251e45355e83efa082c964dc9846534e5f"
+    },
+    {
+      "path": "kitemviews/kitemlistcontainer.cpp",
+      "upstream_sha256": "b4feb7f61b2c2b6c0d8cd7f031949c31aec1e31e24462fd21aa7252860652737"
+    },
+    {
+      "path": "kitemviews/kitemlistcontainer.h",
+      "upstream_sha256": "d613174cea1fe8b1dd8f04bba557f68a8c9c0678d4004962cd9958b36adbe641"
+    },
+    {
+      "path": "kitemviews/kitemrange.h",
+      "upstream_sha256": "a876d24ffbeba50b64381b7b696645bb733e9596ce8d73fa0d332df3df558704"
+    },
+    {
+      "path": "kitemviews/kitemmodelbase.cpp",
+      "upstream_sha256": "9bc13c2a5c9ecdfb456e2771de9eccbe63dd41e00ed3df48e9e32d56ca13d3e0"
+    },
+    {
+      "path": "kitemviews/kitemlistselectionmanager.h",
+      "upstream_sha256": "e45305cd695c1e43d36cdb2786924c289330f99dd10807a12d45128ca624d453"
+    },
+    {
+      "path": "kitemviews/kitemlistheader.cpp",
+      "upstream_sha256": "123a8e7950230680ce3dec8f621c1265b642eff3d1d8ef6eb53730145642dc61"
+    },
+    {
+      "path": "kitemviews/kitemlistgroupheader.cpp",
+      "upstream_sha256": "675259391e9c44a96debd7781aaaf0b2c09c3449f2557a4922a3ecde9c49ce43"
+    },
+    {
+      "path": "kitemviews/kitemliststyleoption.h",
+      "upstream_sha256": "44cd82d60d5cb56b3839f314918482131c784dcad01a9ab76be924bbfc196a17"
+    },
+    {
+      "path": "kitemviews/kitemlistgroupheader.h",
+      "upstream_sha256": "dbd7730145bc914294976f7d3a9d0e4240dc07f30cfb99dc8b09c8f78e592d2d"
+    },
+    {
+      "path": "kitemviews/kitemlistselectionmanager.cpp",
+      "upstream_sha256": "f8213179efa61ce1be2a6a051c81c25ba760dd6a3c2c30148da9cc28767727d6"
+    },
+    {
+      "path": "kitemviews/kitemlistwidget.h",
+      "upstream_sha256": "03be26a73f661fb24a368c861f89dc0fdc2ee442ff9d6e9c129878949c2b059f"
+    },
+    {
+      "path": "kitemviews/kitemset.cpp",
+      "upstream_sha256": "d7d717db9a667a9748bee11c31614ae0be323c992c35bcda0fc0db3c1b3fb5c3"
+    },
+    {
+      "path": "kitemviews/kitemset.h",
+      "upstream_sha256": "058fd4ab4779f0339c9e6e3f9e6cbb923dd106f011b6d50be4d12ab387b22c9f"
+    },
+    {
+      "path": "kitemviews/kitemlistcontroller.h",
+      "upstream_sha256": "2703747e83df8112e6c88cecd982e3852638c70a8ddb0cc7089034a9b70314a3"
+    },
+    {
+      "path": "kitemviews/kitemmodelbase.h",
+      "upstream_sha256": "fade6678500e29e51d322e89883fb427674ce866069452d0e596e856bdb6bfcf"
+    },
+    {
+      "path": "kitemviews/kitemlistheader.h",
+      "upstream_sha256": "f1e6d74c08247dfd3b9d4806eed714608a53aa584d12bc01f64cb617ec55d845"
+    },
+    {
+      "path": "kitemviews/kitemlistcontroller.cpp",
+      "upstream_sha256": "8090c2e367da64dcaa24d2f09aa2db4f13dde3d8e493ac005a4ab302edf08b4f"
+    },
+    {
+      "path": "kitemviews/kitemlistwidget.cpp",
+      "upstream_sha256": "d2bf859bb65bffdaab1091d6b6fa6afb43a5311d7a1d9b88f897346096e74110"
+    },
+    {
+      "path": "kitemviews/kitemlistview.cpp",
+      "upstream_sha256": "a0f324d2e65d94a4e04b76cab1a65eb9fc13bd1ed7b581956b2917f39a00f782"
+    },
+    {
+      "path": "kitemviews/kitemliststyleoption.cpp",
+      "upstream_sha256": "4b776666e9847c4a0d176441d8dd24d6ec462c891b274d2f5fc35443c3053860"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistview.cpp",
+      "upstream_sha256": "cf9d0166ce9511df6694d7898a4355636e549af47bdfe9b68c9565cf1e438375"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistwidget.h",
+      "upstream_sha256": "333ef46cd6be324d5d73e03178b71881ed64ed0f6d9648cbe77c0e0dbadcd476"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistwidget.cpp",
+      "upstream_sha256": "da90e7118767dde70644bd25c2c7bbe2a01d8832e50eeab8cbbe62ca8c8fed3a"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistgroupheader.h",
+      "upstream_sha256": "a5ab7ea0a1f78f11d942316b82b5bcc5dc6a2abe2846086819556a8146a99ca6"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistview.h",
+      "upstream_sha256": "837c4e72da1d5552c2d48437b6930c21ad197bab5b096197edae6a7fbf4fe254"
+    },
+    {
+      "path": "kitemviews/kstandarditemlistgroupheader.cpp",
+      "upstream_sha256": "df8b1f7c215604a60e30ba4ca8f3ee1f35def640fed1fb96df857cce4f057949"
+    },
+    {
+      "path": "kitemviews/private/kitemlistviewlayouter.h",
+      "upstream_sha256": "84cb7f534bcc22c731de93ffc0fea69ae4e5e1fbf6f02567454d5bb34e7afe1d"
+    },
+    {
+      "path": "kitemviews/private/kitemlistsizehintresolver.cpp",
+      "upstream_sha256": "a34659f16faa320afdbcd7044d41f4f640f272b8d6b54f5caad060b16db64499"
+    },
+    {
+      "path": "kitemviews/private/kitemlistroleeditor.cpp",
+      "upstream_sha256": "b5756a43cf7a45a261e99e615db56f9d4b7650e66ac8f2a7b47f43c9f1d6fc4d"
+    },
+    {
+      "path": "kitemviews/private/kitemviewsutils.cpp",
+      "upstream_sha256": "3e9d20a2ed81c13688b90d0cc2ce5d207e93a64679b5606ef57d066c0ed873d0"
+    },
+    {
+      "path": "kitemviews/private/kitemlistkeyboardsearchmanager.cpp",
+      "upstream_sha256": "59d8c612a25337e25584216f477a69378c33c32a9f0ef15c93f8e694de5ad6ab"
+    },
+    {
+      "path": "kitemviews/private/kitemlistviewlayouter.cpp",
+      "upstream_sha256": "ac71be3b32611bc3d42f398915f8959f5adb6d81b76b0bb78fddd367c66a918e"
+    },
+    {
+      "path": "kitemviews/private/kitemlistheaderwidget.cpp",
+      "upstream_sha256": "6162776cab9ece5b431af9fae3706cbdc6a4b368f7b7ab49713e4a8ea77dd521"
+    },
+    {
+      "path": "kitemviews/private/kitemlistkeyboardsearchmanager.h",
+      "upstream_sha256": "3d3331ce67f52e68075be135def6d2c9b313225fc8b67209da7529da953f2d6d"
+    },
+    {
+      "path": "kitemviews/private/kitemlistviewanimation.h",
+      "upstream_sha256": "567afece30c66159b634a8e380f11690c871d3f8ca2dc970675cb4ca49418b3d"
+    },
+    {
+      "path": "kitemviews/private/kitemlistheaderwidget.h",
+      "upstream_sha256": "a599782e039189691fe4234b9c692086c818a8f9c2a6cd79cb5543af5ddb1ed4"
+    },
+    {
+      "path": "kitemviews/private/kitemviewsutils.h",
+      "upstream_sha256": "479efc27ffcb776eaa278d3fe047b435a9d90de7b74e00c07a0a2c20306bb56c"
+    },
+    {
+      "path": "kitemviews/private/kitemlistroleeditor.h",
+      "upstream_sha256": "deb48ce01805f1e0fb66e6c76ac063a2b97064170b78944f6273547fd0faa46b"
+    },
+    {
+      "path": "kitemviews/private/kitemlistselectiontoggle.cpp",
+      "upstream_sha256": "d95ccc365ac735a9cd965d8d8f7c2f88def5ec2d39f6ad408483b911aceb5b96"
+    },
+    {
+      "path": "kitemviews/private/kitemlistsizehintresolver.h",
+      "upstream_sha256": "ab4b6b6e809b3b30151c3b45e732a560145e31b92cceb703022a67d20181efb7"
+    },
+    {
+      "path": "kitemviews/private/kitemlistrubberband.cpp",
+      "upstream_sha256": "f31d21c61011fc9e74a9150f67be9871c8a3c5a9bba4a4c3d9c83541bea3f916"
+    },
+    {
+      "path": "kitemviews/private/kitemlistviewanimation.cpp",
+      "upstream_sha256": "4efafebdc90038e533cd3795487a8626526e44bad0ecb844dfd099cb0a9e7c2f"
+    },
+    {
+      "path": "kitemviews/private/kitemlistselectiontoggle.h",
+      "upstream_sha256": "99d04902cbc9b5b32d7cef7bb1822ec055aa1957700eddc41bc9a8361a50f2ae"
+    },
+    {
+      "path": "kitemviews/private/kitemlistsmoothscroller.h",
+      "upstream_sha256": "b3dcdb001b005e5e59e9ddfd314460512dad46802eed126f12ce0e05071035b5"
+    },
+    {
+      "path": "kitemviews/private/kitemlistsmoothscroller.cpp",
+      "upstream_sha256": "bb6af353e9ac4fe981e76eb16075dac1e1dced062ee94232601ec035e6c12ae3"
+    },
+    {
+      "path": "kitemviews/private/kitemlistrubberband.h",
+      "upstream_sha256": "c1dabb78748bd0c7d4fc0459f3e152f5399348d62c6c1d56fd3f4343fb41f48e"
+    },
+    {
+      "path": "kitemviews/private/kpixmapmodifier.cpp",
+      "upstream_sha256": "55442c2f7f0b770e2dd49b7d814dac16e29c69b006169fc708db0926d2d0995f"
+    },
+    {
+      "path": "kitemviews/private/kpixmapmodifier.h",
+      "upstream_sha256": "ae7515ec0ab1072f7cba76e76508b6c3181fd0adb74bbf3b78d90a877ff911d5"
+    },
+    {
+      "path": "kitemviews/private/kfileitemclipboard.h",
+      "upstream_sha256": "cafce6e96c88397fff21f8258b49e7b7c35c8c4c6f52de4dbd6ef5059d1100dc"
+    },
+    {
+      "path": "kitemviews/private/kfileitemclipboard.cpp",
+      "upstream_sha256": "2865b8a9daf5c87ff8f5a0f71db051374dea0f4c0debe2e66d4674e8ab637352"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistdelegateaccessible.cpp",
+      "upstream_sha256": "8ba73333aa9b6d77105486b948edbde810c574e438f034b677ebc561d1513ac2"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistcontaineraccessible.cpp",
+      "upstream_sha256": "04510fadd4b4e5e088ecbcc68f88e76b5ac757447be84756863fd735cf4b6454"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistcontaineraccessible.h",
+      "upstream_sha256": "1419895af7c6f9076671bbe79196b18e0aa53af1c164950366b11ca1b33cd372"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistdelegateaccessible.h",
+      "upstream_sha256": "ff45beca3314f4690b2a636e417e7ee349e3ab14d0d7d4ff6ef63a234d9beb82"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistviewaccessible.h",
+      "upstream_sha256": "4d32924e73c3b545fb5ed3349a3cd8db77a34b89bc85f732919362af42b310e0"
+    },
+    {
+      "path": "kitemviews/accessibility/kitemlistviewaccessible.cpp",
+      "upstream_sha256": "2056a4cc3519fdd93875422f5b61096b20baf7f0b55826bc89f15b12f412be87"
+    },
+    {
+      "path": "settings/dolphin_contentdisplaysettings.kcfgc",
+      "upstream_sha256": "3a79f7932eaa2f122234b093e982d6998501f41191ca87f89f0b3751ef21f964"
+    },
+    {
+      "path": "settings/dolphin_contentdisplaysettings.kcfg",
+      "upstream_sha256": "be7baa5fd2a38bdbff1764d9b1c1736f1613eacdf5b5174f4ed17e178bf5fa82"
+    }
+  ],
+  "integration_modifications": [
+    "kitemviews/kstandarditemlistwidget.h",
+    "kitemviews/kstandarditemlistwidget.cpp",
+    "kitemviews/accessibility/kitemlistdelegateaccessible.cpp"
+  ]
+}

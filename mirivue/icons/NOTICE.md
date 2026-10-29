@@ -1,0 +1,3 @@
+Icône Mirivue KDE « Saphir et ambre », dessin vectoriel original sur fond transparent, sans ressource Dolphin ou Breeze incorporée. Elle représente un dossier bleu, un paysage, une onde sonore et la lecture média. Licence MIT du dessin original (voir LICENSES/MIT.txt ; distribution combinée décrite dans LICENSE). Les fichiers mirivue-*.png, mirivue.ico et mirivue.icns sont les rendus de mirivue.svg. L’icône indépendante de Mirivue GNOME n’est pas concernée.
+
+Attribution collective : Mirivue contributors (2026), conforme à la notice MIT du projet. Cette mention ne certifie pas une identité individuelle ni une provenance indépendante. Les fichiers .license associent explicitement les images à cette licence.

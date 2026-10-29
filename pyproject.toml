@@ -1,0 +1,19 @@
+[project]
+name = "mirivue-kde"
+version = "1.0.0rc195"
+description = "Gestionnaire de fichiers orienté médias pour KDE Plasma"
+requires-python = ">=3.11,<3.15"
+license = { text = "GPL-3.0-or-later" }
+dependencies = [
+  "PySide6>=6.8,<7",
+  "Pillow>=10,<13",
+  "mutagen>=1.47,<2",
+  "shiboken6>=6.8,<7",
+]
+
+[project.scripts]
+mirivue-kde = "mirivue.app:main"
+
+[tool.mirivue]
+desktop-id = "org.pdenams.Mirivue.Qt"
+supported-desktop = "KDE Plasma 6 / Wayland"

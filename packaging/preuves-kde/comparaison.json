@@ -1,0 +1,26 @@
+[
+  {
+    "mirivue_path": "native/dolphin-engine/settings/dolphin_contentdisplaysettings.kcfg",
+    "upstream_file": "dolphin_contentdisplaysettings.kcfg",
+    "sha256": "be7baa5fd2a38bdbff1764d9b1c1736f1613eacdf5b5174f4ed17e178bf5fa82",
+    "identical": true,
+    "license": "GPL-2.0-or-later",
+    "copyright": "KDE Contributors"
+  },
+  {
+    "mirivue_path": "native/dolphin-engine/settings/dolphin_contentdisplaysettings.kcfgc",
+    "upstream_file": "dolphin_contentdisplaysettings.kcfgc",
+    "sha256": "3a79f7932eaa2f122234b093e982d6998501f41191ca87f89f0b3751ef21f964",
+    "identical": true,
+    "license": "GPL-2.0-or-later",
+    "copyright": "KDE Contributors"
+  },
+  {
+    "mirivue_path": "mirivue/servicemenu.knsrc",
+    "upstream_file": "servicemenu.knsrc",
+    "sha256": "cbeb14bc5aad51ba55958c9c5c0c842bfe11f532fee85ad1c3f99ce62b4887d7",
+    "identical": true,
+    "license": "GPL-2.0-or-later",
+    "copyright": "KDE Contributors"
+  }
+]

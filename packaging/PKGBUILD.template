@@ -1,0 +1,88 @@
+pkgname=mirivue-kde
+pkgver=1.0.0rc195
+pkgrel=1
+pkgdesc='Gestionnaire de fichiers orienté médias pour KDE Plasma'
+arch=('x86_64')
+url='https://local.invalid/mirivue'
+license=('GPL-3.0-or-later' 'MIT' 'GPL-2.0-or-later' 'BSD-2-Clause')
+depends=(
+  'python>=3.11' 'python<3.15' 'pyside6>=6.8' 'pyside6<7' 'qt6-base' 'qt6-multimedia' 'qt6-webengine'
+  'python-pillow' 'python-mutagen' 'shiboken6' 'ffmpeg' 'mediainfo'
+  'ark' '7zip' 'unrar' 'perl-image-exiftool' 'mkvtoolnix-cli' 'kio' 'kservice' 'kiconthemes' 'kxmlgui' 'kconfigwidgets' 'kcolorscheme' 'knewstuff' 'kcoreaddons' 'kwindowsystem' 'kparts' 'kguiaddons' 'kwidgetsaddons' 'ktextwidgets' 'ki18n'
+)
+makedepends=('cmake' 'ninja' 'extra-cmake-modules')
+optdepends=('konsole: panneau Terminal intégré')
+conflicts=('mirivue-kde-bin')
+provides=('mirivue-kde-bin')
+source=('Mirivue-1.0.0-RC195-KDE.tar.gz')
+sha256sums=('@SOURCE_SHA256@')
+
+build() {
+  local root="$srcdir/Mirivue-1.0.0-RC195-KDE"
+  cmake -S "$root/native" -B "$srcdir/build" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "$srcdir/build"
+}
+
+package() {
+  local root="$srcdir/Mirivue-1.0.0-RC195-KDE"
+  local helpers=(
+    mirivue-job-progress
+    mirivue-kio-list
+    mirivue-kio-open
+    mirivue-kio-applications
+    mirivue-kio-empty-trash
+    mirivue-kio-places
+    mirivue-kio-preview
+    mirivue-kio-service
+    mirivue-kio-transfer
+  )
+  install -d "$pkgdir/usr/lib/mirivue-kde" \
+             "$pkgdir/usr/bin" \
+             "$pkgdir/usr/share/applications" \
+             "$pkgdir/usr/share/icons/hicolor/256x256/apps" \
+             "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+  cp -a "$root/mirivue" "$root/Lancer.sh" "$pkgdir/usr/lib/mirivue-kde/"
+  install -d "$pkgdir/usr/lib/mirivue-kde/tools"
+  for helper in "${helpers[@]}"; do
+    install -m0755 "$srcdir/build/$helper" "$pkgdir/usr/lib/mirivue-kde/tools/$helper"
+  done
+  install -m0755 "$srcdir/build/libmirivue-kio-places-widget.so" \
+    "$pkgdir/usr/lib/mirivue-kde/tools/libmirivue-kio-places-widget.so"
+  install -m0755 "$srcdir/build/libmirivue-item-presentation.so" \
+    "$pkgdir/usr/lib/mirivue-kde/tools/libmirivue-item-presentation.so"
+  install -m0755 "$srcdir/build/libmirivue-dolphin-view.so" \
+    "$pkgdir/usr/lib/mirivue-kde/tools/libmirivue-dolphin-view.so"
+  install -d "$pkgdir/usr/share/licenses/$pkgname/dolphin-engine"
+  cp -a "$root/native/dolphin-engine/LICENSES/." "$pkgdir/usr/share/licenses/$pkgname/dolphin-engine/"
+  install -m0644 "$root/native/dolphin-engine/UPSTREAM.json" "$pkgdir/usr/share/licenses/$pkgname/dolphin-engine/"
+  install -m0644 "$root/native/NATURAL-SORT-UPSTREAM.json" "$root/native/DATE-GROUPS-UPSTREAM.json" "$pkgdir/usr/share/licenses/$pkgname/"
+  install -m0644 "$root/native/dolphin-engine/README.md" "$pkgdir/usr/share/licenses/$pkgname/dolphin-engine/README.md"
+  chmod 0755 "$pkgdir/usr/lib/mirivue-kde/Lancer.sh"
+  ln -s /usr/lib/mirivue-kde/Lancer.sh "$pkgdir/usr/bin/mirivue-kde"
+  install -Dm0644 "$root/LICENCES-TIERS.md" "$pkgdir/usr/share/licenses/$pkgname/LICENCES-TIERS.md"
+  install -Dm0644 "$root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  cp -a "$root/LICENSES" "$pkgdir/usr/share/licenses/$pkgname/"
+  install -m 0644 "$root/mirivue/icons/mirivue-256.png" \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/org.pdenams.Mirivue.Qt.png"
+  install -m 0644 "$root/mirivue/icons/mirivue.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.pdenams.Mirivue.Qt.svg"
+  cat > "$pkgdir/usr/share/applications/org.pdenams.Mirivue.Qt.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Mirivue KDE
+GenericName=Gestionnaire de fichiers
+Comment=Parcourir, organiser et analyser les fichiers
+Exec=/usr/bin/mirivue-kde %U
+TryExec=/usr/bin/mirivue-kde
+Icon=org.pdenams.Mirivue.Qt
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.pdenams.Mirivue.Qt
+Categories=Qt;KDE;System;FileTools;FileManager;
+MimeType=inode/directory;
+Keywords=media;video;audio;image;files;
+EOF
+}

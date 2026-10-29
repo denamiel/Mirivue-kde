@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+ <title>Mirivue KDE — B révisée, Saphir et ambre</title>
+ <defs>
+  <linearGradient id="back" x2=".6" y2="1"><stop stop-color="#397cdb"/><stop offset="1" stop-color="#174699"/></linearGradient>
+  <linearGradient id="front" x2=".25" y2="1"><stop stop-color="#56a9ec"/><stop offset="1" stop-color="#2464bd"/></linearGradient>
+  <linearGradient id="photo" x2="0" y2="1"><stop stop-color="#8ad8f8"/><stop offset="1" stop-color="#3471c0"/></linearGradient>
+ </defs>
+ <!-- Fill the standard icon canvas to match neighboring Dolphin launchers. -->
+ <g transform="translate(256 464) scale(1.18 1.13) translate(-256 -464)">
+ <g transform="translate(256 266) scale(.90 1.12) translate(-256 -266)">
+ <path d="M36 149q0-22 22-22h127l36 34h230q24 0 24 24v227q0 22-22 22H58q-22 0-22-22Z" fill="#142c65" opacity=".25" transform="translate(0 9)"/>
+ <path d="M36 140q0-22 22-22h127l36 34h230q24 0 24 24v227q0 22-22 22H58q-22 0-22-22Z" fill="url(#back)"/>
+ <path d="M54 187h403v91H54Z" fill="#f1f8ff"/>
+ <rect x="76" y="174" width="175" height="140" rx="9" fill="#194a8f" opacity=".25"/>
+ <rect x="75" y="168" width="175" height="140" rx="9" fill="#e9f7ff"/>
+ <rect x="83" y="176" width="159" height="124" rx="4" fill="url(#photo)"/>
+ <circle cx="208" cy="198" r="12" fill="#fff0c4"/>
+ <path d="m89 279 38-60 34 40 23-35 54 55H89Z" fill="#eef8ff"/>
+ <path d="M37 278q0-19 19-19h397q21 0 21 21v134q0 20-20 20H57q-20 0-20-20Z" fill="#12315f" opacity=".27" transform="translate(0 8)"/>
+ <path d="M37 270q0-19 19-19h397q21 0 21 21v134q0 20-20 20H57q-20 0-20-20Z" fill="url(#front)"/>
+ <path d="M57 261h392" stroke="#a4e5ff" stroke-width="5" opacity=".7"/>
+ <path d="M94 348v22m23-39v57m23-76v95m23-64v34" fill="none" stroke="#173e83" stroke-width="10" stroke-linecap="round"/>
+ <circle cx="344" cy="341" r="61" fill="#ffcf72" opacity=".3"/>
+ <circle cx="344" cy="337" r="57" fill="#f5aa3a"/>
+ <path d="M330 309q-7-5-7 5v48q0 10 7 5l42-25q8-5 0-10Z" fill="#fff"/>
+ </g>
+ </g>
+</svg>

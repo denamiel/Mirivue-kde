@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+build/
+BUILDROOT/
+rpmbuild/
+construction-*/
+verification-mock-*/
+RPM/
+SRPM/
+*.rpm
+*.tar.gz
+packaging/fedora/SOURCE.sha256

@@ -1,0 +1,12 @@
+{
+  "repository": "https://invent.kde.org/system/dolphin",
+  "tag": "v26.08.2",
+  "file": "src/dolphincontextmenu.cpp",
+  "sha256": "930e06e69d8f5c447aaeb475b6ab324f986d90a70097dac27fda802724a5e49f",
+  "function": "DolphinContextMenu::addOpenWithActions",
+  "lines": [
+    495,
+    498
+  ],
+  "adaptation": "Original client of the same public KIO API; no copied implementation"
+}

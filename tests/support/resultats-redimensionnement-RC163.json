@@ -1,0 +1,94 @@
+[
+  {
+    "version": "1.0.0-rc162",
+    "columns": 6,
+    "rows_per_pane": 120,
+    "python": "3.12.14",
+    "qt": "6.12.0",
+    "style": "fusion",
+    "steps": 180,
+    "median_ms": 8.657,
+    "p95_ms": 10.323,
+    "max_ms": 13.232,
+    "profiled_steps": 80,
+    "source_calls": {
+      "flags": 4054,
+      "rowCount": 4054,
+      "columnCount": 4054
+    },
+    "python_event_filters": {
+      "app.py": 11584,
+      "menu_visibility.py": 9630
+    },
+    "native": true,
+    "view_engine": "QTableView",
+    "visible_objects": null
+  },
+  {
+    "version": "1.0.0-rc162",
+    "columns": 38,
+    "rows_per_pane": 120,
+    "python": "3.12.14",
+    "qt": "6.12.0",
+    "style": "fusion",
+    "steps": 180,
+    "median_ms": 8.913,
+    "p95_ms": 10.029,
+    "max_ms": 13.176,
+    "profiled_steps": 80,
+    "source_calls": {
+      "flags": 4000,
+      "rowCount": 4000,
+      "columnCount": 4000
+    },
+    "python_event_filters": {
+      "app.py": 12061,
+      "menu_visibility.py": 10116
+    },
+    "native": true,
+    "view_engine": "QTableView",
+    "visible_objects": null
+  },
+  {
+    "version": "1.0.0-rc163",
+    "columns": 6,
+    "rows_per_pane": 120,
+    "python": "3.12.14",
+    "qt": "6.12.0",
+    "style": "fusion",
+    "steps": 180,
+    "median_ms": 8.957,
+    "p95_ms": 11.653,
+    "max_ms": 13.737,
+    "profiled_steps": 80,
+    "source_calls": {},
+    "python_event_filters": {
+      "app.py": 3712,
+      "dolphin_view.py": 626
+    },
+    "native": true,
+    "view_engine": "KStandardItemListView",
+    "visible_objects": 27
+  },
+  {
+    "version": "1.0.0-rc163",
+    "columns": 38,
+    "rows_per_pane": 120,
+    "python": "3.12.14",
+    "qt": "6.12.0",
+    "style": "fusion",
+    "steps": 180,
+    "median_ms": 9.722,
+    "p95_ms": 12.233,
+    "max_ms": 15.51,
+    "profiled_steps": 80,
+    "source_calls": {},
+    "python_event_filters": {
+      "app.py": 3840,
+      "dolphin_view.py": 560
+    },
+    "native": true,
+    "view_engine": "KStandardItemListView",
+    "visible_objects": 27
+  }
+]

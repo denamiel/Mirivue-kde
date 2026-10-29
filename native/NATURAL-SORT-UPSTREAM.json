@@ -1,0 +1,7 @@
+{
+  "repository": "https://invent.kde.org/system/dolphin",
+  "tag": "v26.08.2",
+  "source": "src/kitemviews/kfileitemmodel.cpp",
+  "source_sha256": "4c6e209a8bc662acef22f90ea53b34130656c51bbdee63e0e89f0052558e0eab",
+  "extraction": "anonymous namespace unchanged; stringCompare name/extension ordering in a thread-local Qt C ABI; separate non-natural QString comparison mirrors stringCompare"
+}
