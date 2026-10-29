@@ -26,7 +26,7 @@ jobs:
         run: |
           cp -a "$GITHUB_WORKSPACE" /home/builder/source
           chown -R builder:builder /home/builder/source
-          su builder -c 'cd /home/builder/source && bash Construire-paquet-CachyOS.sh'
+          su builder -c 'cd /home/builder/source && CI=true bash Construire-paquet-CachyOS.sh'
           mkdir -p dist
           cp /home/builder/source/*.pkg.tar.zst dist/
           cd dist

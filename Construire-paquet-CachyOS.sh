@@ -26,7 +26,11 @@ tar -C "$source_dir" --exclude='./.git' --exclude='./.github' \
 checksum="$(sha256sum "$archive" | cut -d' ' -f1)"
 sed -e "s/@SOURCE_SHA256@/$checksum/" -e "s/@PKGVER@/$version/" \
   "$source_dir/packaging/PKGBUILD.template" > "$build_dir/PKGBUILD"
-(cd "$build_dir" && makepkg --clean --force --syncdeps)
+makepkg_options=(--clean --force --syncdeps)
+if [[ "${CI:-}" == true ]]; then
+  makepkg_options+=(--noconfirm)
+fi
+(cd "$build_dir" && makepkg "${makepkg_options[@]}")
 mapfile -t packages < <(cd "$build_dir" && makepkg --packagelist)
 for package in "${packages[@]}"; do
   test -f "$package"
