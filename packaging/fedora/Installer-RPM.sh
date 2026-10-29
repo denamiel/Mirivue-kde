@@ -15,7 +15,7 @@ for p in pathlib.Path('/proc').glob('[0-9]*/cmdline'):
     except (FileNotFoundError, PermissionError, ProcessLookupError): pass
 PY
 shopt -s nullglob
-packages=("RPM/mirivue-kde-1.0.0-0.196.beta1.1.fc44.$(uname -m).rpm")
+packages=("RPM/mirivue-kde-1.0.0-0.196.beta1.2.fc44.$(uname -m).rpm")
 [[ ${#packages[@]} == 1 && -f "${packages[0]}" ]] || { echo 'Construire le RPM auparavant avec bash Construire-RPM.sh' >&2; exit 1; }
 # Installer d'abord : un echec DNF laisse l'installation personnelle intacte.
 sudo dnf install "./${packages[0]}"

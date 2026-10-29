@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.1%{?dist}
+Release: 0.196.beta1.2%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz
@@ -113,13 +113,13 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
-* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.1
+* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.2
 - Verify upstream KDE REUSE declarations; preserve licensing evidence.
 
-* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.1
+* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.2
 - Clarify packaging, icon and metadata licenses; keep unresolved provenance documented.
 
-* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.1
+* Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.2
 - Include validator as Source1; make SRPM self-contained.
 
 * Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.195.rc195

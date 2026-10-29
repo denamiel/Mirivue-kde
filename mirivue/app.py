@@ -5579,7 +5579,7 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
         box.exec()
 
     def show_about(self):
-        QMessageBox.about(self, tr('À propos de Mirivue'), trf('<h2>Mirivue</h2><p>Version : <b>\x1f0\x1f</b><br>Date de publication : \x1f1\x1f<br>Nom : <b>\x1f2\x1f</b></p><p>Your Media, Clearly Organised</p><p>Gestion de fichiers et lecture locale des informations de vos vidéos, sons et images sous Linux.</p><p>Python · Qt/PySide6 · MediaInfo · FFmpeg<br>Licence du projet : MIT</p>', __version__, RELEASE_DATE, AUTHOR))
+        QMessageBox.about(self, tr('À propos de Mirivue'), trf('<h2>Mirivue</h2><p>Version : <b>\x1f0\x1f</b><br>Date de publication : \x1f1\x1f<br>Nom : <b>\x1f2\x1f</b></p><p>Your Media, Clearly Organised</p><p>Gestion de fichiers et lecture locale des informations de vos vidéos, sons et images sous Linux.</p><p>Python · Qt/PySide6 · MediaInfo · FFmpeg<br>Distribution combinée : GNU GPL v3 ou ultérieure.<br>Parties originales sous MIT ; composants tiers sous leurs licences propres.<br>Voir LICENSE et LICENCES-TIERS.md dans les sources.</p>', __version__, RELEASE_DATE, AUTHOR))
 
     def show_diagnostics(self):
         report = diagnostic_report(__version__)

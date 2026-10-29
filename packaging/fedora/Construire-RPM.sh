@@ -19,7 +19,7 @@ cp mirivue-kde.spec "$buildtop/SPECS/"
 option=-ba
 if [[ $mode == --source-only ]]; then option=-bs; fi
 rpmbuild "$option" --define "_topdir $buildtop" --define 'dist .fc44' "$buildtop/SPECS/mirivue-kde.spec"
-source_rpm="$buildtop/SRPMS/mirivue-kde-1.0.0-0.196.beta1.1.fc44.src.rpm"
+source_rpm="$buildtop/SRPMS/mirivue-kde-1.0.0-0.196.beta1.2.fc44.src.rpm"
 # Verifier les fichiers effectivement inclus, pas seulement les declarations.
 rpm -qpl "$source_rpm" > "$buildtop/sources-incluses.txt"
 grep -Fxq 'Mirivue-1.0.0-beta.1-KDE.tar.gz' "$buildtop/sources-incluses.txt"
@@ -31,7 +31,7 @@ cp "$source_rpm" SRPM/
 rpm -K "$source_rpm"
 if [[ $mode == binaire ]]; then
  mkdir -p RPM
- cp "$buildtop/RPMS/$(uname -m)/mirivue-kde-1.0.0-0.196.beta1.1.fc44.$(uname -m).rpm" RPM/
- rpm -K RPM/mirivue-kde-1.0.0-0.196.beta1.1.fc44.*.rpm
+ cp "$buildtop/RPMS/$(uname -m)/mirivue-kde-1.0.0-0.196.beta1.2.fc44.$(uname -m).rpm" RPM/
+ rpm -K RPM/mirivue-kde-1.0.0-0.196.beta1.2.fc44.*.rpm
 fi
 printf '\nConstruction terminee. Sources autonomes : %s/SRPM\n' "$PWD"
