@@ -30,7 +30,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          dnf -y install dist/rpms/x86_64/*.rpm
+          dnf -y --setopt=tsflags= install dist/rpms/x86_64/*.rpm
           test "$(rpm -q --qf '%{RELEASE}' mirivue-kde)" = "$(rpmspec -q --srpm --qf '%{RELEASE}' packaging/fedora/mirivue-kde.spec)"
           for document in README.md LISEZ-MOI-KDE.txt packaging/README.md packaging/fedora/PUBLICATION.md; do
             cmp "$document" "/usr/share/doc/mirivue-kde/$document"
