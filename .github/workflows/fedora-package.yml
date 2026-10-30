@@ -23,6 +23,7 @@ jobs:
           persist-credentials: false
       - name: Construire le RPM avec ses contrôles natifs
         run: |
+          chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
           dnf -y builddep packaging/fedora/mirivue-kde.spec
           bash packaging/fedora/Preparer-Sources.sh
           rpmbuild -ba --define "_sourcedir $PWD/packaging/fedora" --define "_rpmdir $PWD/dist/rpms" --define "_srcrpmdir $PWD/dist/srpms" --define "_smp_build_ncpus 2" packaging/fedora/mirivue-kde.spec
