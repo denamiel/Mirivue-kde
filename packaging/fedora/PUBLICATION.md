@@ -3,8 +3,10 @@
 ## Références de version
 
 Version visible : **1.0.0-beta.1**. Dans la recette actuelle de `main` :
-`Version: 1.0.0` et `Release: 0.196.beta1.2%{?dist}`.
-La révision précédente `0.196.beta1.1` est historique.
+`Version: 1.0.0` et `Release: 0.196.beta1.3%{?dist}`.
+Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
+La révision 3 ajoute les guides corrigés sous `/usr/share/doc/mirivue-kde/`
+et permet leur distribution par une mise à jour DNF.
 Lire [mirivue-kde.spec](mirivue-kde.spec) pour la valeur à construire.
 
 Conserver un ordre RPM croissant pour les prochaines bêtas et révisions de

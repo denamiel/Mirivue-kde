@@ -103,4 +103,5 @@ MimeType=inode/directory;
 Keywords=media;video;audio;image;files;
 EOF
   desktop-file-validate "$pkgdir/usr/share/applications/org.pdenams.Mirivue.Qt.desktop"
+  bash "$root/packaging/install_docs.sh" "$pkgdir/usr/share/doc/$pkgname"
 }

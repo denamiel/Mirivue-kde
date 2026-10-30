@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.2%{?dist}
+Release: 0.196.beta1.3%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz
@@ -90,6 +90,8 @@ cp -a packaging/preuves-kde %{buildroot}%{_datadir}/licenses/%{name}/
 install -d %{buildroot}%{_datadir}/licenses/%{name}/notices-kde
 cp native/dolphin-engine/settings/*.license mirivue/servicemenu.knsrc.license %{buildroot}%{_datadir}/licenses/%{name}/notices-kde/
 
+bash packaging/install_docs.sh "%{buildroot}%{_docdir}/%{name}"
+
 %check
 python3 "%{SOURCE1}" --self-test
 appstreamcli validate --no-net packaging/org.pdenams.Mirivue.Qt.metainfo.xml
@@ -102,6 +104,7 @@ for helper in mirivue-kio-service mirivue-kio-list; do
 done
 
 %files
+%doc %{_docdir}/%{name}/
 %{_bindir}/mirivue-kde
 %{_libdir}/mirivue-kde/
 %{_datadir}/applications/org.pdenams.Mirivue.Qt.desktop
@@ -113,6 +116,9 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
+* Sat Oct 31 2026 Mirivue contributors - 1.0.0-0.196.beta1.3
+- Ship and verify updated installation and publication guides.
+
 * Thu Oct 29 2026 Pascal Denamiel - 1.0.0-0.196.beta1.2
 - Verify upstream KDE REUSE declarations; preserve licensing evidence.
 

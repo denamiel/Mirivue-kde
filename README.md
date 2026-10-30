@@ -87,3 +87,12 @@ Voir [LICENSE](LICENSE), [LICENCES-TIERS.md](LICENCES-TIERS.md), les dossiers
 
 Projet porté par Pascal Denamiel. Les auteurs tiers sont crédités dans leurs
 fichiers et notices.
+
+## Documentation installée
+
+Les paquets contenant la révision documentaire installent les guides dans
+`/usr/share/doc/mirivue-kde/`, en conservant leurs sous-dossiers.
+Le contenu copié est comparé aux sources pendant le conditionnement.
+Sur Fedora, cette livraison porte la révision RPM `0.196.beta1.3` ;
+les versions applicatives restent inchangées. Une mise à jour du dépôt GitHub
+seul ne remplace pas les documents d'un paquet déjà installé.

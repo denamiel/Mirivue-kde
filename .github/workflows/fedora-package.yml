@@ -1,0 +1,45 @@
+name: RPM Fedora et documentation installée
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rpm:
+    name: RPM KDE Fedora ${{ matrix.fedora }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ['44', '45']
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - name: Préparer Fedora
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Construire le RPM avec ses contrôles natifs
+        run: |
+          dnf -y builddep packaging/fedora/mirivue-kde.spec
+          bash packaging/fedora/Preparer-Sources.sh
+          rpmbuild -ba --define "_sourcedir $PWD/packaging/fedora" --define "_rpmdir $PWD/dist/rpms" --define "_srcrpmdir $PWD/dist/srpms" --define "_smp_build_ncpus 2" packaging/fedora/mirivue-kde.spec
+      - name: Installer et vérifier les guides et le lancement
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          dnf -y install dist/rpms/x86_64/*.rpm
+          test "$(rpm -q --qf '%{RELEASE}' mirivue-kde)" = "$(rpmspec -q --srpm --qf '%{RELEASE}' packaging/fedora/mirivue-kde.spec)"
+          for document in README.md LISEZ-MOI-KDE.txt packaging/README.md packaging/fedora/PUBLICATION.md; do
+            cmp "$document" "/usr/share/doc/mirivue-kde/$document"
+          done
+          cd /tmp
+          mirivue-kde --version
+          dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-kde-fedora-${{ matrix.fedora }}
+          path: dist/rpms/x86_64/*.rpm
+          if-no-files-found: error
