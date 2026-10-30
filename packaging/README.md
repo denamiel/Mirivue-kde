@@ -1,43 +1,57 @@
 # Paquets CachyOS / Arch Linux et Fedora
 
-Le code est commun aux deux distributions. La version de référence est
-`mirivue/__init__.py` : actuellement **1.0.0-beta.1**.
-Le paquet Arch porte `1.0.0beta1`. Le RPM encode cette même version
-dans ses champs Version/Release pour conserver un ordre de mise à jour correct.
+Version de référence : `mirivue/__init__.py`, actuellement **1.0.0-beta.1**.
+La version Python est `1.0.0b1`, la version Arch `1.0.0beta1`.
+Pour Fedora, lire les champs Version/Release dans
+[fedora/mirivue-kde.spec](fedora/mirivue-kde.spec) ; ils ne se déduisent pas
+directement du nom visible de la bêta.
 
-## Construction automatique CachyOS
+## Dépôt Pacman signé — installation recommandée
 
-Chaque modification de main et chaque pull request lance le workflow
-**Paquet CachyOS et Arch Linux** dans un environnement Arch Linux.
-Le paquet x86_64 contient les assistants C++ compilés et les sources Python.
-La construction vérifie la syntaxe Python, le lanceur desktop et les dépendances
-liées des assistants KIO principaux. Cela ne remplace pas un essai graphique sur CachyOS.
-
-Pour récupérer une construction : ouvrir l'onglet Actions, la dernière exécution
-réussie, puis télécharger l'artefact `mirivue-kde-arch-x86_64` et extraire le ZIP.
-Les artefacts Actions ont une durée de conservation limitée.
-
-À la publication d'une Release GitHub, le workflow reconstruit les sources de
-cette publication et joint le paquet et son fichier SHA256SUMS à la Release.
-Créer le tag sur le commit dont la version a été mise à jour et vérifiée.
-Aucun secret personnel supplémentaire n'est nécessaire.
-
-## Installation et mise à jour CachyOS
-
-Fermer Mirivue, ouvrir un terminal dans le dossier du paquet extrait, puis :
+Le [dépôt mirivue-arch](https://github.com/denamiel/mirivue-arch) est publié.
+Suivre son [guide d'installation](https://github.com/denamiel/mirivue-arch#installation-sur-arch--cachyos-x86_64)
+pour vérifier l'empreinte de la clé publique et ajouter sa section à Pacman.
 
 ```bash
-sha256sum -c SHA256SUMS
-sudo pacman -U ./mirivue-kde-*.pkg.tar.zst
+sudo pacman -Syu mirivue-kde
 ```
 
-Pacman installe les dépendances déclarées et gère le paquet.
-Pour les versions suivantes, télécharger le nouveau paquet et répéter ces commandes.
-Aucun dépôt Pacman ni publication AUR n'est configuré : `pacman -Syu` seul
-ne téléchargera donc pas les nouvelles versions de Mirivue.
+Après cette configuration unique, `sudo pacman -Syu` met aussi à jour Mirivue.
+Le dépôt fournit des préversions pour Arch/CachyOS x86_64, pas des RPM Fedora.
+Il ne nécessite pas de compte AUR, de compte GitHub ou de clé privée côté client.
 
-Si une ancienne installation manuelle dans le dossier personnel masque le
-lanceur du paquet, la migration doit être vérifiée avant de supprimer cette installation.
+Le workflow central examine les deux projets chaque heure. Il ne sélectionne
+que le commit courant de `main` ayant réussi son workflow requis, puis reconstruit
+les paquets avec les recettes amont. Il vérifie leur installation simultanée et
+leur lancement hors écran avant signature et publication. Un échec bloque cette
+publication. La clé de production est réservée au job de publication.
+Les archives sources correspondant aux paquets sont conservées.
+
+Une nouvelle version repart à `pkgrel=1` ; une reconstruction d'une même version
+augmente `pkgrel`. Une correction documentaire peut donc produire une nouvelle
+révision de paquet sans changer le numéro de version de l'application.
+Les mises à jour déjà installées ne s'appliquent pas sans lancer le gestionnaire
+de mises à jour du système.
+
+## Artefacts GitHub et installation manuelle
+
+Le workflow [Paquet CachyOS et Arch Linux](../.github/workflows/arch-package.yml)
+construit sur les modifications de `main`, les pull requests, les lancements
+manuels et les publications GitHub. Il vérifie notamment la syntaxe Python,
+le lanceur desktop et les dépendances liées des assistants KIO principaux.
+
+L'artefact `mirivue-kde-arch-x86_64` contient les paquets et `SHA256SUMS`.
+Sa durée de conservation est limitée. Sur l'événement de publication d'une
+Release, le workflow joint aussi ces fichiers à cette Release.
+
+Après extraction, fermer Mirivue, vérifier `sha256sum -c SHA256SUMS`, puis
+installer le paquet principal voulu avec `sudo pacman -U ./NOM_EXACT_DU_PAQUET`.
+Une construction peut fournir aussi un paquet de symboles de débogage ; ce n'est
+pas une seconde édition de Mirivue. Le contrôle SHA-256 vérifie l'intégrité des
+fichiers téléchargés, sans remplacer la confiance apportée par une signature.
+
+Cette méthode manuelle ne configure pas le dépôt Pacman. L'AUR est un circuit
+distinct : aucune soumission à l'AUR n'est effectuée par ces workflows.
 
 ## Construction locale
 
@@ -50,16 +64,23 @@ cd Mirivue-kde
 bash Construire-paquet-CachyOS.sh
 ```
 
-Exécuter le script sans sudo. makepkg demande sudo uniquement pour installer
-les dépendances manquantes. Le dossier source peut porter n'importe quel nom.
+Exécuter le script sans sudo. Il emploie `makepkg` et peut demander les droits
+pour installer les dépendances. Fermer Mirivue avant l'installation du paquet.
+Le dossier source peut porter n'importe quel nom. Si un ancien lanceur personnel
+masque celui du paquet, vérifier sa provenance avant toute suppression.
+Ne pas supprimer les réglages pour résoudre un conflit de lanceurs.
 
-## Publier une correction commune
+## Publier une correction
 
-1. Corriger et tester le code commun.
-2. Incrémenter la version dans `mirivue/__init__.py` et `pyproject.toml`,
-   puis les sources/metadonnées et Version/Release du conditionnement Fedora.
-3. Envoyer le commit sur main ; vérifier la construction Arch et celle de COPR.
-4. Publier une Release GitHub pour distribuer durablement le paquet Arch.
+1. Corriger et tester le code sur une branche de travail.
+2. Pour une version applicative, mettre à jour les versions et le conditionnement
+   de manière cohérente ; compléter `CHANGELOG.md`. Pour une correction de
+   documentation seule, conserver la version de l'application.
+3. Intégrer à `main` et attendre le workflow Arch requis. Le dépôt Pacman central
+   prend ensuite en charge les nouveaux commits validés ; une Release GitHub
+   propre à l'application n'est pas nécessaire à ce circuit.
+4. Pour Fedora, appliquer séparément le
+   [circuit COPR](fedora/PUBLICATION.md) et vérifier la construction concernée.
 
-COPR conserve son conditionnement dans `packaging/fedora/` et sa recette
-`.copr/Makefile`. Le workflow Arch ne modifie pas sa configuration.
+Une réussite Arch ne déclenche ni ne valide, à elle seule, une construction COPR.
+La configuration et les droits des webhooks sont extérieurs aux fichiers Git.

@@ -1,7 +1,7 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version de développement : **1.0.0-beta.1**.
+Version de développement : **1.0.0-beta.1** (préversion).
 
 ## Installer sur Fedora 44 x86_64
 
@@ -13,29 +13,34 @@ sudo dnf install mirivue-kde
 ```
 
 Lancez **Mirivue KDE** depuis le menu des applications ou avec `mirivue-kde`.
-Pour mettre à jour, utilisez Discover ou :
+Pour mettre à jour, utilisez votre gestionnaire de mises à jour ou :
 
 ```bash
 sudo dnf upgrade --refresh mirivue-kde
 ```
 
 COPR est un dépôt communautaire distinct des dépôts officiels Fedora.
+Les versions de Fedora et architectures réellement disponibles sont celles
+des constructions réussies du projet COPR.
 
-## Installer sur CachyOS / Arch Linux
+## Installer sur CachyOS / Arch Linux x86_64
 
-Les paquets sont construits par [GitHub Actions](https://github.com/denamiel/Mirivue-kde/actions/workflows/arch-package.yml).
-Téléchargez l'artefact de la dernière construction réussie et extrayez le ZIP,
-ou utilisez le paquet joint à une [publication](https://github.com/denamiel/Mirivue-kde/releases).
+Le [dépôt Pacman signé Mirivue](https://github.com/denamiel/mirivue-arch)
+distribue les éditions KDE et GNOME dans deux paquets indépendants.
 
-Dans le dossier du paquet, après avoir fermé Mirivue :
+Suivez une seule fois son [guide d'installation](https://github.com/denamiel/mirivue-arch#installation-sur-arch--cachyos-x86_64)
+pour vérifier la clé publique et ajouter le dépôt à `/etc/pacman.conf`.
+Puis :
 
 ```bash
-sha256sum -c SHA256SUMS
-sudo pacman -U ./mirivue-kde-*.pkg.tar.zst
+sudo pacman -Syu mirivue-kde
 ```
 
-Les mises à jour CachyOS nécessitent de télécharger et installer le nouveau paquet.
-Voir [le guide des deux distributions](packaging/README.md).
+Les mises à jour suivantes sont incluses dans `sudo pacman -Syu`.
+Aucune connexion GitHub ni clé privée n'est nécessaire sur l'ordinateur client.
+L'installation depuis un artefact Actions avec `pacman -U` reste possible,
+mais ne configure pas à elle seule les mises à jour.
+Voir [le guide de conditionnement](packaging/README.md).
 
 ## Fonctions
 
@@ -48,18 +53,37 @@ La lecture des médias dépend aussi des codecs installés.
 
 ## Retours et problèmes
 
-Ouvrez une [Issue](https://github.com/denamiel/Mirivue-kde/issues) en indiquant la version de Mirivue, Fedora/KDE, les étapes de reproduction et le résultat attendu. Retirez les données personnelles des captures et journaux.
+Ouvrez une [Issue](https://github.com/denamiel/Mirivue-kde/issues) en indiquant
+la version de Mirivue, le système, le bureau, les étapes de reproduction et le
+résultat attendu. Retirez les données personnelles des captures et journaux.
 
-## Sources et construction
+## Sources, validation et publication
 
-Sources Python et C++ de la RC195 avec les notices de la révision RPM `0.195.rc195.3.fc44`. L'import initial ne contient pas l'historique des versions précédentes. Les tests sources sont conservés ; les résultats temporaires et captures de validation ne sont pas inclus. Les comptes rendus anciens restent des documents historiques.
+Le dépôt contient les sources Python et C++, les tests et le conditionnement.
+L'import initial provenait de la RC195 ; ce repère est historique et ne désigne
+pas la version actuelle. Les anciens rapports par RC conservent leurs résultats
+et leurs limites ; ils ne constituent pas les instructions d'installation actuelles.
 
-Les outils Fedora sont décrits dans [packaging/fedora/README.md](packaging/fedora/README.md). GitHub conserve les sources et les signalements ; COPR construit et distribue les RPM. Aucun déclenchement automatique GitHub → COPR n'est configuré.
+Les [outils Fedora](packaging/fedora/README.md) et le
+[circuit de publication COPR](packaging/fedora/PUBLICATION.md) décrivent le rôle
+de la branche `publication`. Le suivi Pacman utilise, lui, les commits de `main`
+ayant réussi le workflow Arch requis ; il ne dépend pas de cette branche COPR.
+Un tag ou une modification locale ne met pas directement à jour les ordinateurs.
+
+Les constructions Arch et les essais hors écran ne remplacent pas une validation
+dans une session Plasma réelle. Les résultats d'une ancienne RC ne sont pas
+présentés comme les résultats de la bêta actuelle.
 
 ## Licences
 
-La distribution combinée est sous **GPL-3.0-or-later**. Les parties originales identifiées sous MIT conservent cette permission. Les composants Dolphin conservent leurs auteurs et licences, notamment GPL-2.0-or-later et BSD-2-Clause. Les métadonnées AppStream sont sous CC0-1.0.
+La distribution combinée est sous **GPL-3.0-or-later**. Les parties originales
+identifiées sous MIT conservent cette permission. Les composants Dolphin
+conservent leurs auteurs et licences, notamment GPL-2.0-or-later et BSD-2-Clause.
+Les métadonnées AppStream sont sous CC0-1.0.
 
-Voir [LICENSE](LICENSE), [LICENCES-TIERS.md](LICENCES-TIERS.md), les dossiers `LICENSES/` et les notices adjacentes. Les preuves KDE sont dans `packaging/preuves-kde/`.
+Voir [LICENSE](LICENSE), [LICENCES-TIERS.md](LICENCES-TIERS.md), les dossiers
+`LICENSES/` et les notices adjacentes. Les preuves KDE sont dans
+`packaging/preuves-kde/`.
 
-Projet porté par Pascal Denamiel. Les auteurs tiers sont crédités dans leurs fichiers et notices.
+Projet porté par Pascal Denamiel. Les auteurs tiers sont crédités dans leurs
+fichiers et notices.

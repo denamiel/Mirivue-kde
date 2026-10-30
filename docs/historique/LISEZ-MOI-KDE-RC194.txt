@@ -1,0 +1,160 @@
+MIRIVUE KDE 1.0.0 RC194 — CANDIDATE DE STABILISATION
+
+À lire : ce fichier pour installer ; VALIDATION-RC194.md pour les résultats
+actuels et leurs limites ; STABILISATION.md pour les critères de publication.
+PARITE-DOLPHIN.md décrit les écarts. Les anciens rapports par RC sont historiques.
+
+Extraire entièrement Mirivue-1.0.0-RC194-KDE.tar.gz. Sur CachyOS/Arch :
+
+  ./Valider-RC194.sh
+  ./Construire-paquet-CachyOS.sh
+  sudo pacman -U ./mirivue-kde-1.0.0rc194-1-x86_64.pkg.tar.zst
+  ./Verifier-installation-RC194.sh
+
+Pour une installation utilisateur hors paquet système, exécuter Installer.sh.
+Ce script refuse d'installer une seconde copie si pacman gère déjà Mirivue.
+La vérification préalable est accessible avec Installer.sh --check-dependencies.
+Les assistants KDE sont compilés depuis les sources ; aucun binaire natif
+précompilé n'est livré dans l'archive.
+
+Depuis la RC163, Mirivue remplace les vues de fichiers par KItemListContainer,
+KStandardItemListView et KStandardItemListWidget, issus de Dolphin 26.08.2.
+Un seul moteur natif par panneau sert aux modes détails, icônes et compact.
+Le dessin, les objets visibles et l’en-tête sont natifs ; les outils de
+métadonnées, le renommage en masse et les opérations KIO restent disponibles.
+La validation construit le moteur réel et teste ses interactions. Aucun
+nouvel essai manuel n’est demandé pour cette correction. Les mesures et leurs
+limites sont consignées dans ANALYSE-REACTIVITE.md. Voir LICENCES-TIERS.md.
+La RC166 corrige la palette et la hauteur des fils d’Ariane : le cadre et les
+couleurs sont ceux du composant KDE, y compris après un changement de police
+ou de style. La validation compile aussi le contrôle de rendu natif et le
+compare à KUrlNavigator, sans nouvel essai manuel demandé.
+La RC167 corrige Ctrl+A avec la barre de menus masquée. La sélection reste
+limitée au panneau actif et les champs de saisie gardent Ctrl+A pour leur texte.
+La RC168 étend cette correction à tous les raccourcis, reprend les variantes
+standard de KDE et aligne les transferts et commandes de terminal sur Dolphin.
+Voir RACCOURCIS.md pour les combinaisons, les essais et leurs limites.
+La RC169 corrige les fonds des panneaux et le cadre des fils d’Ariane avec
+Brise et Union en reprenant les conteneurs et la palette native de Dolphin.
+Les couleurs restent celles de KDE ; Union n’est pas une dépendance imposée.
+Voir UNION.md pour la documentation utilisée et les vérifications automatisées.
+La RC170 rétablit le glisser-déposer vers les zones libres et les dossiers
+vides des trois vues. Les dépôts vers Emplacements et les fils d’Ariane
+mettent aussi à jour la source active sans recharger les panneaux locaux.
+Les raccourcis, menus et liens sont vérifiés ; voir TRANSFERTS.md et ses limites.
+La RC171 empêche la remontée au dossier parent lors d’un double-clic sur un
+en-tête. Le titre conserve son tri natif et le double-clic sur une séparation
+ajuste la largeur de la colonne. Le bouton des miniatures mémorise aussi une
+valeur par défaut, reprise dans les dossiers sans choix spécifique et au
+prochain lancement. Les exceptions déjà choisies par dossier sont conservées.
+La RC172 active le panneau qui reçoit le focus par Tab ou Maj+Tab.
+Un renommage quitté par un clic dans l’autre panneau est validé dans son
+panneau d’origine, sans rediriger les miniatures ni le rafraîchissement des
+dossiers. Le filtre de noms accepte les adresses KIO et les chemins locaux.
+La RC194 laisse KDE afficher la progression des transferts. La fenêtre
+Opérations conserve l’historique et permet d’arrêter le transfert sélectionné
+ou tous les transferts. Le bouton d’arrêt du chargement n’annule pas une
+copie. Les durées déjà calculées restent affichées pendant les analyses.
+Les opérations longues ou en pause ne sont plus annulées après cinq minutes
+par Mirivue. Voir PROGRESSION.md pour la portée des contrôles.
+L’historique complet des corrections figure dans CHANGELOG.md.
+
+La RC161 a réduit le travail Python du délégué de la vue détaillée.
+La RC160 laisse Breeze tracer un cadre neutre autour des fils d’Ariane et évite une série de vérifications répétées pendant le redimensionnement de la vue détaillée.
+La RC158 reprend le conteneur du navigateur KDE et aligne les chemins dès le déplacement du séparateur.
+La RC157 évite les mises en page superflues pendant le déplacement du séparateur.
+La RC156 ménage l’espace du cadre KDE natif autour de chaque fil d’Ariane.
+La RC155 corrige le blocage de validation hors écran de la RC154.
+La RC154 donne au fil d’Ariane son cadre KDE explicite dans la barre d’outils
+et ajoute les menus d’historique aux boutons Précédent et Suivant. Les choix
+personnels d’organisation et de zoom sont conservés.
+La RC153 corrige le contrôle du fil d’Ariane lancé sous Wayland : un refus de
+focus automatique ne fait plus échouer la vérification après installation.
+La RC152 aligne le fil d’Ariane KDE sur la visibilité du panneau Emplacements
+et des dossiers cachés ; Entrée revient aux boutons du chemin. La RC151
+maintient le suivi des sauvegardes après remontage d’un support et
+vérifie avec prudence les suivis hérités de la RC150. Cette dernière conserve
+un seul original identifiable lors des modifications des métadonnées et du
+débit ; la récupération est décrite dans RECUPERATION.md.
+La RC149 corrige la réouverture en plein écran depuis l’aperçu. La RC148
+fait suivre les couleurs d’état et les unités de taille du thème KDE,
+mémorise la taille et l’état agrandi de la fenêtre, corrige l’aide et laisse
+les tailles de texte suivre la police du système. Les nouvelles installations
+utilisent les dates régionales ; les choix de date déjà enregistrés sont
+respectés. Le paquet exige aussi kcolorscheme et kcoreaddons. La RC147 a
+amélioré le contrôle KIO et la fermeture depuis le dock. QtPdf utilise
+qt6-webengine. Lire
+STABILISATION.md pour les conditions de publication de la 1.0 stable,
+COMPATIBILITE.md pour la portée actuelle, A-verifier-RC194.md pour les essais
+manuels et CHANGELOG.md pour l'historique des versions.
+
+Désinstallation du paquet : fermer Mirivue, puis exécuter
+  ./Desinstaller-paquet-CachyOS.sh
+depuis ce dossier, avec le compte utilisateur habituel. `pacman -R` seul
+conserve le service FileManager1 présent dans le dossier de cet utilisateur.
+Chaque autre compte qui utilise Mirivue doit nettoyer son propre service.
+L'installation utilisateur par Installer.sh n'a pas encore de commande de
+désinstallation intégrée ; voir RECUPERATION.md pour la procédure du paquet.
+
+ERGONOMIE DEPUIS LA RC164
+Outils donne directement accès à Renommer et organiser, Métadonnées,
+Collections et Opérations. F2 garde le renommage habituel ; Renommage avancé
+ouvre l’outil intégré et sa méthode À partir des métadonnées. Les actions
+externes indiquent le logiciel utilisé. Ctrl+N ouvre une nouvelle fenêtre.
+Opérations réunit Transferts et Analyses dans une seule fenêtre à onglets.
+Affichage distingue les informations sous les icônes et les colonnes des détails.
+Les configurations prédéfinies sont éditées dans Configurer Mirivue → Configurations de colonnes,
+puis appliquées dans Affichage → Configurations de colonnes au dossier actif.
+Les dispositions de barre d’outils personnelles sont conservées. Les boutons
+individuels des modes de vue restent disponibles dans sa configuration.
+L’ancienne collecte d’historique de lecture est arrêtée sans effacer les données
+existantes. Fichiers récents conserve son réglage indépendant.
+
+AFFICHAGE SIMPLIFIÉ
+La colonne État est retirée, y compris des anciennes configurations.
+Les noms utilisent les couleurs normales du thème KDE. Survolez un fichier
+pour retrouver les détails d’une erreur, d’un doublon ou d’une étiquette.
+Les rapports d’opérations et les outils médias restent disponibles.
+
+Tri et navigation (RC194)
+-----------------------
+Le critère et le sens du tri sont communs par défaut : ils sont conservés à la
+navigation et au prochain lancement. Configuration → Général → Navigation et
+fichiers → « Mémoriser le tri pour chaque dossier » permet de retrouver les
+anciens tris propres à chaque dossier ; ils ne sont pas effacés en mode commun.
+Le comparateur des noms vient du code de Dolphin 26.08.2 et utilise la langue
+du système. À taille ou durée égale, le nom départage les éléments.
+
+Les dossiers déjà ouverts sont réutilisés dans la fenêtre qui reçoit la demande.
+Les nouvelles installations utilisent le défaut de Dolphin 26.08.2 pour les
+demandes externes : une nouvelle fenêtre. Le choix des installations existantes
+est conservé, et « Ouvrir les nouveaux dossiers en onglets » reste disponible.
+Le clic du milieu dans une vue de fichiers ouvre un dossier en arrière-plan ;
+Maj+clic du milieu active le nouvel onglet.
+
+RC194 — vues, onglets et session
+Voir PARITE-DOLPHIN.md pour les réglages communs/par dossier, les styles spéciaux,
+la restauration de session et le routage entre fenêtres. Les choix de démarrage
+existants sont conservés. KWindowSystem (paquet kwindowsystem sur Arch/CachyOS)
+est désormais déclaré directement pour l’activation Wayland/X11.
+
+RC194 — fiabilisation de la restauration des onglets
+Correction des panneaux restés vides, des proportions de séparation, du dossier
+rouvert et du nom personnalisé, ainsi que des sélections externes différées.
+Voir CHANGELOG.md et VALIDATION-RC194.md.
+Le type Qt de la surface de dessin native est également corrigé afin de ne plus
+la traiter comme une zone de défilement.
+
+RC194 — derniers écarts de présentation et de fermeture
+Fermeture et détachement disponibles pendant le chargement des onglets.
+Reconnaissance de .hidden et de l’état caché KIO ; actualisation incrémentale.
+Titres et icônes issus des Emplacements ; options de barre d’onglets dans Général.
+Les valeurs choisies sur une installation existante sont conservées.
+Distribution combinée sous GPL-3.0-or-later ; droits MIT antérieurs conservés.
+Voir LICENCES-TIERS.md, PARITE-DOLPHIN.md et VALIDATION-RC194.md.
+
+MENU CONTEXTUEL ET RENOMMAGE — RC194
+
+Voir MENU-CONTEXTUEL.md : commandes et services configurables, partage des
+préférences de services avec Dolphin et nouveaux noms en gras dans l’aperçu
+du renommage intégré. Le paquet déclare knewstuff pour le bouton KDE natif.
