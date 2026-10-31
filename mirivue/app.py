@@ -2881,11 +2881,22 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
                 event.accept()
                 return True
         if event_type == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton:
-            view = self.active_view()
-            if watched is view.viewport() and view.is_view_background(event.position().toPoint()):
-                if self.folder and self.settings.value('navigation/empty-double-click-up', False, type=bool):
-                    self.navigate(parent_location(self.folder))
-                    return True
+            # Resolve the receiving pane before consulting the bound pane.
+            # Empty-space presses need not emit the native item pressed signal.
+            if self.settings.value('navigation/empty-double-click-up', False, type=bool):
+                for pane in getattr(self, 'panes', ()):
+                    if not pane.container.isVisible():
+                        continue
+                    view = pane.content_stack.currentWidget()
+                    viewport = view.viewport()
+                    if watched is not viewport:
+                        continue
+                    if view.is_view_background(event.position().toPoint()):
+                        self.activate_pane(pane, focus_view=False)
+                        if self.folder:
+                            self.navigate(parent_location(self.folder))
+                            return True
+                    break
         return super().eventFilter(watched, event)
 
     def toggle_previews(self, enabled):
