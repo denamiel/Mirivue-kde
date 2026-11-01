@@ -5716,6 +5716,13 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
         self.close()
 
     def closeEvent(self, event):
+        # Preserve all transfer workers before any shutdown/cancellation path.
+        if self.pending_transfers():
+            self.save_tab_session()
+            self.save_pane_column_states()
+            self.allow_transfer_close()
+            event.ignore()
+            return
         if getattr(self, '_sidebar_width_save_timer', None) is not None and self._sidebar_width_save_timer.isActive():
             self._sidebar_width_save_timer.stop()
             self.save_sidebar_width()

@@ -469,28 +469,9 @@ class BackgroundTransfers:
     def allow_transfer_close(self):
         if not self.pending_transfers():
             return True
-        if self.transfer_quitting:
-            return False
-        box = QMessageBox(self)
-        box.setWindowTitle(tr('Transferts en cours'))
-        box.setText(tr('Des opérations de fichiers sont en cours. Que souhaitez-vous faire ?'))
-        keep = box.addButton(tr('Continuer en arrière-plan'), QMessageBox.ButtonRole.ActionRole)
-        stop = box.addButton(tr('Arrêter les transferts et quitter'), QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(tr('Revenir à Mirivue'), QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        if box.clickedButton() is keep:
-            self.quit_requested = False
-            if self.tray is not None and QSystemTrayIcon.isSystemTrayAvailable():
-                self.tray.show()
-                self.hide()
-            else:
-                self.showMinimized()
-        elif box.clickedButton() is stop:
-            self.transfer_quitting = True
-            for job in self.pending_transfers():
-                self.cancel_transfer(job)
-            if not self.active_transfer:
-                QTimer.singleShot(0, self.close)
-        else:
-            self.quit_requested = False
+        # Closing the window never cancels queued or running file operations.
+        self.quit_requested = False
+        if self.tray is not None and QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray.show()
+        self.hide()
         return False
