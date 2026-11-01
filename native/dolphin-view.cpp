@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <QIcon>
 #include <QLabel>
+#include <QGraphicsOpacityEffect>
 #include <QScrollBar>
 #include <QStyle>
 #include <QPointer>
@@ -280,6 +281,13 @@ public:
         // Keep KItemListContainer's native frame, as DolphinView does. Flat
         // containers are made transparent by Breeze::polishScrollArea().
         empty=new QLabel(widget); empty->setAlignment(Qt::AlignCenter); empty->setWordWrap(true);
+        // Match DolphinView's native placeholder: heading size and half opacity.
+        QFont placeholderFont;
+        placeholderFont.setPointSize(qRound(placeholderFont.pointSize() * 1.3));
+        empty->setFont(placeholderFont);
+        auto *placeholderEffect = new QGraphicsOpacityEffect(empty);
+        placeholderEffect->setOpacity(0.5);
+        empty->setGraphicsEffect(placeholderEffect);
         empty->setAttribute(Qt::WA_TransparentForMouseEvents); empty->hide();
         widget->installEventFilter(this);
         updatePalette();

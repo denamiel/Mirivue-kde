@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.6%{?dist}
+Release: 0.196.beta1.7%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz

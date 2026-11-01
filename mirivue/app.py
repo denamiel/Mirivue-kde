@@ -3997,7 +3997,7 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
         elif self.search_active:
             message = tr('Aucun résultat dans ce dossier et ses sous-dossiers.')
         else:
-            message = tr('Ce dossier est vide.\nVous pouvez y déposer des fichiers ou des dossiers.')
+            message = tr('Le dossier est vide.')
         for view in (self.table, self.icons, self.compact):
             view.empty_message = message
             view.viewport().update()
