@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.5%{?dist}
+Release: 0.196.beta1.6%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz
@@ -40,6 +40,8 @@ Mirivue KDE 1.0.0-beta.1 avec assistants KIO et moteur de vue natif compiles.
 sed -i 's|/usr/lib/qt6/plugins/multimedia/libgstreamermediaplugin.so|%{_libdir}/qt6/plugins/multimedia/libgstreamermediaplugin.so|' Lancer.sh
 
 %build
+# Embed the exact RPM release automatically for every subsequent build.
+sed -i "s/^BUILD_REVISION = .*/BUILD_REVISION = '%{release}.%{_arch}'/" mirivue/__init__.py
 cmake -S native -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_CXX_FLAGS="%{optflags}"
 cmake --build build --parallel %{_smp_build_ncpus}
 

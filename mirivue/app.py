@@ -47,7 +47,7 @@ from .view_policy import per_folder_views, special_view, ViewPolicyMixin
 from .tab_ui import DolphinTabBar
 from .session_state import SessionMixin
 from .folder_icons import standard_folder_icons, themed_folder_icon
-from . import __version__, RELEASE_DATE, AUTHOR
+from . import __version__, RELEASE_DATE, AUTHOR, BUILD_REVISION
 from .diagnostics import begin_session, diagnostic_report, end_session, record_tool_failure, state_directory
 from .iconography import themed_icon, set_themed_action_icon, add_destructive_action, add_dynamic_trash_action, context_help_button
 from .archive_backend import extract_rar_with_ark, safe_archive_entry_name
@@ -5590,7 +5590,7 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
         box.exec()
 
     def show_about(self):
-        QMessageBox.about(self, tr('À propos de Mirivue'), trf('<h2>Mirivue</h2><p>Version : <b>\x1f0\x1f</b><br>Date de publication : \x1f1\x1f<br>Nom : <b>\x1f2\x1f</b></p><p>Your Media, Clearly Organised</p><p>Gestion de fichiers et lecture locale des informations de vos vidéos, sons et images sous Linux.</p><p>Python · Qt/PySide6 · MediaInfo · FFmpeg<br>Distribution combinée : GNU GPL v3 ou ultérieure.<br>Parties originales sous MIT ; composants tiers sous leurs licences propres.<br>Voir LICENSE et LICENCES-TIERS.md dans les sources.</p>', __version__, RELEASE_DATE, AUTHOR))
+        QMessageBox.about(self, tr('À propos de Mirivue'), trf('<h2>Mirivue</h2><p>Version : <b>\x1f0\x1f</b><br>Révision du paquet : <b>\x1f3\x1f</b><br>Date de publication : \x1f1\x1f<br>Nom : <b>\x1f2\x1f</b></p><p>Your Media, Clearly Organised</p><p>Gestion de fichiers et lecture locale des informations de vos vidéos, sons et images sous Linux.</p><p>Python · Qt/PySide6 · MediaInfo · FFmpeg<br>Distribution combinée : GNU GPL v3 ou ultérieure.<br>Parties originales sous MIT ; composants tiers sous leurs licences propres.<br>Voir LICENSE et LICENCES-TIERS.md dans les sources.</p>', __version__, RELEASE_DATE, AUTHOR, BUILD_REVISION))
 
     def show_diagnostics(self):
         report = diagnostic_report(__version__)
