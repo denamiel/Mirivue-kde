@@ -38,7 +38,7 @@ class TestInstallerDependencies(unittest.TestCase):
     def test_all_python_runtime_modules_are_checked(self):
         for module in ('QtWidgets', 'QtDBus', 'QtMultimedia', 'QtMultimediaWidgets', 'QtPdf', 'shiboken6', 'PIL', 'mutagen'):
             self.assertIn(module, self.installer)
-        self.assertIn('(3, 11) <= sys.version_info[:2] < (3, 15)', self.installer)
+        self.assertIn('sys.version_info[:2] >= (3, 11)', self.installer)
         self.assertIn('(6, 8) <= v < (7, 0)', self.installer)
 
     def test_external_tools_and_kio_libraries_are_checked(self):
