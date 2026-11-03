@@ -16,9 +16,9 @@ class TestArchPackage(unittest.TestCase):
         self.assertIn('Exec=/usr/bin/mirivue-kde %U', template)
         self.assertIn('Categories=Qt;KDE;System;FileTools;FileManager;', template)
         self.assertIn('MimeType=inode/directory;', template)
-        self.assertIn('makepkg --clean --force', builder)
-        self.assertIn("--exclude='Mirivue-1.0.0-RC194-KDE/tests'", builder)
-        self.assertIn("'python<3.15'", template)
+        self.assertIn('makepkg_options=(--clean --force --syncdeps)', builder)
+        self.assertIn("'python>=3.11'", template)
+        self.assertNotRegex(template, r"'python<[^']+'")
         self.assertIn("'pyside6<7'", template)
         self.assertNotIn("'pyside6<6.12'", template)
         for dependency in ('cmake', 'ninja', 'extra-cmake-modules'):
@@ -30,8 +30,7 @@ class TestArchPackage(unittest.TestCase):
         self.assertNotIn('"$srcdir/build"/mirivue-kio-*', template)
         self.assertNotIn('cp -a "$root/mirivue" "$root/tools"', template)
         self.assertIn('pkgname=mirivue-kde\n', template)
-        self.assertIn("-name 'mirivue-kde-*.pkg.tar.*'", builder)
-        self.assertIn('for command in cmake ninja', builder)
+        self.assertIn('makepkg --packagelist', builder)
 
 
 if __name__ == '__main__':

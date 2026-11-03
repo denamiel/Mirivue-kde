@@ -7,12 +7,12 @@ de régler les formats Qt du système hors des libellés propres à Mirivue.
 ## Environnement et dépendances
 
 La cible de référence est CachyOS / Arch Linux, KDE Plasma 6, Qt 6 et KF6,
-avec une session Wayland. Le paquet Fedora accepte Python 3.11 à 3.15 (Python < 3.16) et PySide6 6.8
+avec une session Wayland. Les paquets acceptent Python 3.11 ou supérieur et PySide6 6.8
 ou version 6 ultérieure, avec Shiboken6 compatible. Il dépend également de
 QtMultimedia, QtPdf, Pillow, Mutagen, KIO/KF6, Ark, FFmpeg/FFprobe, MediaInfo,
 7z, unar ou unrar, ExifTool et MKVToolNix. Konsole est facultatif pour le
-panneau Terminal intégré. La recette Arch conserve sa limite Python < 3.15 ;
-son élargissement nécessite une validation propre à Arch.
+panneau Terminal intégré. Aucune borne supérieure Python n’est ajoutée par
+anticipation ; une restriction doit correspondre à une incompatibilité réelle.
 
 Le moteur des fichiers est désormais compilé dans `libmirivue-dolphin-view.so`.
 Il intègre les sources de Dolphin 26.08.2 et requiert les composants KF6
@@ -40,6 +40,21 @@ utilisateur depuis les sources extraites, il configure CMake dans un dossier
 temporaire pour vérifier la disponibilité des fichiers de développement Qt/KF6 ;
 l'installation compile ensuite les assistants. Les sources ne contiennent plus
 d'exécutables précompilés.
+
+## Évolutions de Python
+
+La suppression des bornes artificielles ne garantit pas toute version future :
+PySide6, Shiboken6, Pillow et les bibliothèques système doivent aussi être compatibles.
+L’installateur vérifie leurs imports avant de modifier une installation utilisateur.
+Les gestionnaires de paquets continuent à contrôler leurs dépendances.
+
+Les contrôles GitHub testent Python 3.11 et le dernier Python 3 stable disponible
+(`3.x`, résolu à chaque exécution), ainsi que les RPM Fedora 44/45 installés.
+Chaque lundi, les mêmes contrôles sont relancés. Fedora Rawhide sert à anticiper
+les futures évolutions de Python, Qt et KF6 ; un échec y est expérimental,
+visible dans le résumé Actions, et ne valide pas une nouvelle plateforme.
+Aucun paquet Rawhide n’est publié par ce contrôle. Une correction reste nécessaire
+si une évolution modifie réellement une API ou si une dépendance n’est pas prête.
 
 ## Installation et sessions
 

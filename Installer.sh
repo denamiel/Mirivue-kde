@@ -47,8 +47,8 @@ check_dependencies() {
   missing_components=()
   missing_packages=()
 
-  python_imports 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] < (3, 16) else 1)' || \
-    add_missing 'Python compatible (3.11 à 3.15)' python python3
+  python_imports 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)' || \
+    add_missing 'Python 3.11 ou supérieur' python python3
 
   python_imports 'from PySide6 import QtCore, QtGui, QtWidgets, QtNetwork, QtDBus' || \
     add_missing 'Interface Qt/PySide6' pyside6 python3-pyside6
