@@ -3,11 +3,17 @@
 ## Références de version
 
 Version visible : **1.0.0-beta.1**. Dans la recette actuelle de `main` :
-`Version: 1.0.0` et `Release: 0.196.beta1.3%{?dist}`.
+`Version: 1.0.0` et `Release: 0.196.beta1.8%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
 La révision 3 ajoute les guides corrigés sous `/usr/share/doc/mirivue-kde/`
 et permet leur distribution par une mise à jour DNF.
 Lire [mirivue-kde.spec](mirivue-kde.spec) pour la valeur à construire.
+
+La révision 8 autorise Python 3.15 pour Fedora 45, avec une borne supérieure
+à Python 3.16 exclu. Les contrôles Fedora 44 et 45 importent les dépendances
+graphiques, exécutent les tests de fichiers, puis vérifient le lancement du
+RPM installé. Attendre leur réussite et celle de COPR avant de considérer
+le correctif comme distribué.
 
 Conserver un ordre RPM croissant pour les prochaines bêtas et révisions de
 conditionnement. La version stable utilisera une Release adaptée à la série
