@@ -7,11 +7,12 @@ de régler les formats Qt du système hors des libellés propres à Mirivue.
 ## Environnement et dépendances
 
 La cible de référence est CachyOS / Arch Linux, KDE Plasma 6, Qt 6 et KF6,
-avec une session Wayland. Le paquet accepte Python 3.11 à 3.14 et PySide6 6.8
+avec une session Wayland. Le paquet Fedora accepte Python 3.11 à 3.15 (Python < 3.16) et PySide6 6.8
 ou version 6 ultérieure, avec Shiboken6 compatible. Il dépend également de
 QtMultimedia, QtPdf, Pillow, Mutagen, KIO/KF6, Ark, FFmpeg/FFprobe, MediaInfo,
 7z, unar ou unrar, ExifTool et MKVToolNix. Konsole est facultatif pour le
-panneau Terminal intégré.
+panneau Terminal intégré. La recette Arch conserve sa limite Python < 3.15 ;
+son élargissement nécessite une validation propre à Arch.
 
 Le moteur des fichiers est désormais compilé dans `libmirivue-dolphin-view.so`.
 Il intègre les sources de Dolphin 26.08.2 et requiert les composants KF6
