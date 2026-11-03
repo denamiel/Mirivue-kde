@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.8%{?dist}
+Release: 0.196.beta1.9%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz
@@ -18,7 +18,6 @@ BuildRequires: kf6-kconfig-devel, kf6-kcoreaddons-devel, kf6-kiconthemes-devel
 BuildRequires: kf6-kjobwidgets-devel, kf6-kxmlgui-devel, kf6-kconfigwidgets-devel
 BuildRequires: kf6-kservice-devel, kf6-kparts-devel, python3-devel
 Requires: python3 >= 3.11
-Requires: python3 < 3.16
 Requires: python3-pyside6 >= 6.8
 Requires: python3-pyside6 < 7
 Requires: python3-shiboken6, python3-pillow, python3-mutagen
@@ -118,6 +117,9 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
+* Tue Nov 03 2026 Mirivue contributors - 1.0.0-0.196.beta1.9
+- Remove speculative Python upper bounds; add continuous runtime and Rawhide checks.
+
 * Tue Nov 03 2026 Mirivue contributors - 1.0.0-0.196.beta1.8
 - Accept Python 3.15 for Fedora 45; keep Python 3.16 outside the supported range.
 

@@ -4,16 +4,26 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 1'
 permissions:
   contents: read
 jobs:
   rpm:
     name: RPM KDE Fedora ${{ matrix.fedora }}
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        fedora: ['44', '45']
+        include:
+          - fedora: '44'
+            experimental: false
+          - fedora: '45'
+            experimental: false
+          - fedora: rawhide
+            experimental: true
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
@@ -36,15 +46,42 @@ jobs:
           for document in README.md LISEZ-MOI-KDE.txt packaging/README.md packaging/fedora/PUBLICATION.md; do
             cmp "$document" "/usr/share/doc/mirivue-kde/$document"
           done
-          python3 -c 'import sys, PySide6, shiboken6, PIL, mutagen; from PySide6 import QtCore, QtWidgets, QtMultimedia, QtMultimediaWidgets, QtPdf; print(sys.version, PySide6.__version__)'
-          for test in atomic_io archive_security batch_rename_existing_names execution paste_behavior runtime_tasks safe_metadata_backup recursive_search window_geometry; do
-            python3 -m unittest discover -s tests -p "test_${test}.py" -v
-          done
+          python3 packaging/check_python_runtime.py
           cd /tmp
           mirivue-kde --version
           dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+      - name: Signaler une incompatibilité de développement
+        if: failure() && matrix.experimental
+        run: echo 'Rawhide a échoué. Examiner les dépendances et les tests avant la prochaine migration ; aucun paquet Rawhide n’est publié.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: success() && !matrix.experimental
         with:
           name: rpm-kde-fedora-${{ matrix.fedora }}
           path: dist/rpms/x86_64/*.rpm
           if-no-files-found: error
+
+  python:
+    name: Python ${{ matrix.python }} — imports et fichiers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.x']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          check-latest: true
+      - name: Installer les dépendances déclarées
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon0 libpulse0 libasound2t64
+          python -c 'import subprocess, sys, tomllib; dependencies = tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]; subprocess.check_call([sys.executable, "-m", "pip", "install", *dependencies])'
+      - name: Vérifier le fonctionnement Python
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python packaging/check_python_runtime.py
