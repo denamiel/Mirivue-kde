@@ -1,6 +1,6 @@
 pkgname=mirivue-kde
 pkgver=@PKGVER@
-pkgrel=2
+pkgrel=1
 pkgdesc='Gestionnaire de fichiers orienté médias pour KDE Plasma'
 arch=('x86_64')
 url='https://github.com/denamiel/Mirivue-kde'
@@ -20,6 +20,7 @@ sha256sums=('@SOURCE_SHA256@')
 
 build() {
   local root="$srcdir/mirivue-source"
+  sed -i "s/^BUILD_REVISION = .*/BUILD_REVISION = '$pkgver-$pkgrel (Arch)'/" "$root/mirivue/__init__.py"
   cmake -S "$root/native" -B "$srcdir/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr

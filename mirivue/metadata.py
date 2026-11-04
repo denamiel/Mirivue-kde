@@ -553,7 +553,8 @@ def _save_video_cache(cache, row, signature, sidecar, embedded_setting):
         pass
 
 def failed(path, error):
-    return Video(path, [path.name] + [tr('—')] * 9 + [tr('Erreur'), tr('Indéterminée'), '', '', ''], [path.name.casefold(), -1, -1, -1, '', -1, -1, '', '', -1, tr('Erreur'), tr('indéterminée'), -1, -1, -1], str(error), metadata_loaded=True)
+    detail = tr('Informations multimédias non lues. Le fichier peut être incomplet, inaccessible ou dans un format non reconnu. Aucun contenu n’a été modifié.') + '\n\n' + str(error)
+    return Video(path, [path.name] + [tr('—')] * 9 + [tr('Erreur'), tr('Indéterminée'), '', '', ''], [path.name.casefold(), -1, -1, -1, '', -1, -1, '', '', -1, tr('Erreur'), tr('indéterminée'), -1, -1, -1], detail, metadata_loaded=True)
 
 def basic_entry(path, is_dir=False, *, hidden=None):
     row = Video(path, is_dir=is_dir, is_video=False, media_type=tr('folder') if is_dir else tr('other'), is_hidden=hidden)

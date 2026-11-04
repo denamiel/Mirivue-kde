@@ -296,12 +296,17 @@ def diagnostic_report(version: str | None = None) -> str:
             from . import __version__ as version
         except ImportError:
             version = "inconnue"
+    try:
+        from . import BUILD_REVISION
+    except ImportError:
+        BUILD_REVISION = 'inconnue'
     modules = ["PySide6.QtWidgets", "PySide6.QtDBus", "PySide6.QtMultimedia",
                "PySide6.QtMultimediaWidgets", "PySide6.QtPdf", "PIL", "mutagen", "shiboken6"]
     tools = ["ffmpeg", "ffprobe", "mediainfo", "ark", "exiftool", "mkvpropedit", "mkvextract"]
     lines = [
         "Diagnostic Mirivue KDE",
         f"Version Mirivue : {version}",
+        f"Révision du paquet : {BUILD_REVISION}",
         f"Système : {_os_description()}",
         f"Python : {platform.python_version()}",
         f"Session : {os.environ.get('XDG_SESSION_TYPE', 'inconnue')} / {os.environ.get('XDG_CURRENT_DESKTOP', 'inconnu')}",

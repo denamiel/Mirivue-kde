@@ -1,3 +1,11 @@
+## 1.0.0-beta.2 — 5 novembre 2026
+
+- Consolidation des transferts : tests de contenu avec les moteurs Python et KIO natifs, dont les déplacements entre deux systèmes de fichiers.
+- Régressions obligatoires de navigation, sélection, onglets, renommage et fermeture pendant les transferts.
+- Alertes d’arrêt incomplet, rapport d’installation et erreurs de lecture multimédia mieux distingués.
+- Révision exacte intégrée aux paquets Arch et RPM ; scripts Fedora 44/45 fondés sur la recette courante.
+- Publication COPR conditionnée aux contrôles Fedora et Python.
+
 ## 1.0.0-rc193 — 28 octobre 2026
 
 - Pour une sélection de plusieurs fichiers sans dossier, le haut du menu utilise

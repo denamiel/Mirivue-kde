@@ -2,14 +2,14 @@
 
 ## Références de version
 
-Version visible : **1.0.0-beta.1**. Dans la recette actuelle de `main` :
-`Version: 1.0.0` et `Release: 0.196.beta1.9%{?dist}`.
+Version visible : **1.0.0-beta.2**. Dans la recette actuelle de `main` :
+`Version: 1.0.0` et `Release: 0.197.beta2.1%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
-La révision 3 ajoute les guides corrigés sous `/usr/share/doc/mirivue-kde/`
+Historiquement, la révision 3 a ajouté les guides corrigés sous `/usr/share/doc/mirivue-kde/`
 et permet leur distribution par une mise à jour DNF.
 Lire [mirivue-kde.spec](mirivue-kde.spec) pour la valeur à construire.
 
-La révision 9 conserve Python >= 3.11 sans borne supérieure spéculative.
+La politique de dépendances conserve Python >= 3.11 sans borne supérieure spéculative.
 L’installateur et les métadonnées Python suivent cette même politique.
 Les contrôles testent le Python minimal et le dernier Python stable, puis
 construisent et lancent les RPM Fedora 44/45. Ils sont relancés chaque semaine.
@@ -48,8 +48,8 @@ ne jamais enregistrer l'URL secrète du webhook dans Git ou dans une conversatio
 
 1. Valider le commit candidat et vérifier la cohérence des versions, sources,
    licences et dépendances.
-2. Avancer `publication` vers le commit validé selon la procédure de maintenance,
-   sans écraser des changements de branche non examinés.
+2. Le workflow Fedora avance automatiquement `publication` après réussite des
+   contrôles Python et Fedora, sans écraser des changements de branche non examinés.
 3. Vérifier que COPR construit ce commit ; si le webhook est actif, contrôler
    son résultat plutôt que supposer qu'un push a réussi à publier.
 4. Attendre la réussite dans chaque environnement Fedora annoncé.
@@ -76,3 +76,5 @@ il utilise les commits `main` validés, pas la branche COPR `publication`.
 ## Référence officielle
 
 - https://docs.copr.fedorainfracloud.org/user_documentation.html#webhooks
+
+La grille des contrôles de consolidation figure dans `docs/VALIDATION-beta.2.md`.

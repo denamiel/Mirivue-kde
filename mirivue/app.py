@@ -18,6 +18,7 @@ from .window_geometry import initial_window_size, restore_window_geometry, geome
 from .natural_sort import natural_name_key, cached_natural_name_key, string_compare
 from .i18n import load_system_translation
 from .jobs import JobMixin
+from .diagnostic_dialogs import DiagnosticDialogsMixin
 from .enhancements import EnhancementMixin
 from . import library
 from .file_visibility import hidden_names, local_is_hidden, kio_is_hidden
@@ -958,7 +959,7 @@ class ToolbarCommandGroup(QWidget):
             self.updateGeometry()
 
 
-class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsMixin, MediaMixin, TransferMixin, ExtraActionsMixin, DesktopMixin, PaneMixin, MovementMixin, EnhancementMixin, OrganizationMixin, JobMixin, QMainWindow):
+class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsMixin, MediaMixin, TransferMixin, ExtraActionsMixin, DesktopMixin, PaneMixin, MovementMixin, EnhancementMixin, OrganizationMixin, JobMixin, QMainWindow):
 
     def __init__(self):
         super().__init__()
@@ -5588,40 +5589,6 @@ class Window(ContextMenuMixin, SessionMixin, ViewPolicyMixin, ExternalLocationsM
         box.setText(tr('<h3>Ce que signifient les informations</h3><p><b>Données du fichier</b> : codec, durée, résolution et métadonnées lus dans le média. Mirivue affiche rapidement certaines données à l’ouverture du dossier. Pour lire les autres informations des médias du dossier actif, choisissez « Lire les informations détaillées des médias du dossier » dans Outils → Métadonnées. Une case vide après cette lecture signifie que le fichier ou son conteneur ne fournit pas cette information.</p><p><b>Débit</b> : valeur déclarée dans le média, lue rapidement sans décodage complet. Si aucune valeur fiable n’est disponible, Mirivue affiche une case vide.</p><p><b>Doublon exact</b> : fichiers dont le contenu complet est identique. Mirivue ne supprime jamais de fichier sans votre choix explicite.</p>'))
         box.setInformativeText(tr('Les traitements restent locaux. Leur progression et leur historique sont accessibles depuis Opérations.'))
         box.exec()
-
-    def show_about(self):
-        QMessageBox.about(self, tr('À propos de Mirivue'), trf('<h2>Mirivue</h2><p>Version : <b>\x1f0\x1f</b><br>Révision du paquet : <b>\x1f3\x1f</b><br>Date de publication : \x1f1\x1f<br>Nom : <b>\x1f2\x1f</b></p><p>Your Media, Clearly Organised</p><p>Gestion de fichiers et lecture locale des informations de vos vidéos, sons et images sous Linux.</p><p>Python · Qt/PySide6 · MediaInfo · FFmpeg<br>Distribution combinée : GNU GPL v3 ou ultérieure.<br>Parties originales sous MIT ; composants tiers sous leurs licences propres.<br>Voir LICENSE et LICENCES-TIERS.md dans les sources.</p>', __version__, RELEASE_DATE, AUTHOR, BUILD_REVISION))
-
-    def show_diagnostics(self):
-        report = diagnostic_report(__version__)
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(tr('Diagnostic de Mirivue'))
-        box.setText(tr('État des composants et informations utiles au dépannage.'))
-        box.setInformativeText(tr('Le rapport reste sur cet ordinateur tant que vous ne le copiez pas vous-même.'))
-        box.setDetailedText(report)
-        copy_button = box.addButton(tr('Copier le diagnostic'), QMessageBox.ButtonRole.ActionRole)
-        folder_button = box.addButton(tr('Ouvrir le dossier des journaux'), QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Close)
-        box.exec()
-        if box.clickedButton() is copy_button:
-            QApplication.clipboard().setText(report)
-            self.show_activity_message(tr('Diagnostic copié.'), 4000)
-        elif box.clickedButton() is folder_button:
-            state_directory().mkdir(parents=True, exist_ok=True)
-            services.open_default_file(state_directory())
-
-    def show_previous_unclean_shutdown(self):
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(tr('Arrêt précédent incomplet'))
-        box.setText(tr('Mirivue ne semble pas s’être arrêté normalement lors du lancement précédent.'))
-        box.setInformativeText(tr('Vos fichiers ne sont pas modifiés par ce contrôle. Le journal peut aider à comprendre l’incident.'))
-        diagnostic_button = box.addButton(tr('Afficher le diagnostic'), QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Close)
-        box.exec()
-        if box.clickedButton() is diagnostic_button:
-            self.show_diagnostics()
 
     def confirm_renames(self, plans):
         dialog = QDialog(self)

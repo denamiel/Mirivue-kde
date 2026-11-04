@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.196.beta1.11%{?dist}
+Release: 0.197.beta2.1%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
-Source0: Mirivue-1.0.0-beta.1-KDE.tar.gz
+Source0: Mirivue-1.0.0-beta.2-KDE.tar.gz
 Source1: valider-appstream.py
 Source2: LICENSE-KIT.txt
 ExclusiveArch: x86_64 aarch64
@@ -31,10 +31,10 @@ Recommends: konsole
 %global __brp_python_bytecompile %{nil}
 
 %description
-Mirivue KDE 1.0.0-beta.1 avec assistants KIO et moteur de vue natif compiles.
+Mirivue KDE 1.0.0-beta.2 avec assistants KIO et moteur de vue natif compiles.
 
 %prep
-%setup -q -n Mirivue-1.0.0-beta.1-KDE
+%setup -q -n Mirivue-1.0.0-beta.2-KDE
 # Le lanceur doit aussi trouver GStreamer dans le repertoire lib64 de Fedora.
 sed -i 's|/usr/lib/qt6/plugins/multimedia/libgstreamermediaplugin.so|%{_libdir}/qt6/plugins/multimedia/libgstreamermediaplugin.so|' Lancer.sh
 
@@ -117,6 +117,9 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
+* Thu Nov 05 2026 Mirivue contributors - 1.0.0-0.197.beta2.1
+- Consolidation beta: native KIO integration tests, navigation regressions and clearer incident reports.
+
 * Thu Nov 05 2026 Mirivue contributors - 1.0.0-0.196.beta1.11
 - Harden source cleanup, background shutdown and session diagnostics.
 

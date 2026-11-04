@@ -97,8 +97,9 @@ class TestDiagnostics(unittest.TestCase):
     def test_help_menu_exposes_local_diagnostic(self):
         source = (ROOT / 'mirivue' / 'app.py').read_text(encoding='utf-8')
         self.assertIn("self.diagnostics_action = help_menu.addAction(tr('Diagnostic de Mirivue'), self.show_diagnostics)", source)
-        self.assertIn("tr('Copier le diagnostic')", source)
-        self.assertIn("tr('Ouvrir le dossier des journaux')", source)
+        dialogs = (ROOT / 'mirivue' / 'diagnostic_dialogs.py').read_text(encoding='utf-8')
+        self.assertIn("tr('Copier le diagnostic')", dialogs)
+        self.assertIn("tr('Ouvrir le dossier des journaux')", dialogs)
 
     def test_external_backends_record_failures(self):
         for filename in ('persistence.py', 'media_tags.py', 'metadata.py', 'platform_services.py', 'app.py'):

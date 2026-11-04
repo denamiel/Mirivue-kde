@@ -14,8 +14,12 @@ for p in pathlib.Path('/proc').glob('[0-9]*/cmdline'):
             sys.exit('Fermez Mirivue avant la migration.')
     except (FileNotFoundError, PermissionError, ProcessLookupError): pass
 PY
+source /etc/os-release
+[[ $ID == fedora && $VERSION_ID =~ ^(44|45)$ && ! -e /run/ostree-booted ]] || { echo 'Fedora 44 ou 45 classique requis.' >&2; exit 1; }
+dist=".fc${VERSION_ID}"
+package_id="$(rpmspec -q --srpm --define "dist $dist" --qf '%{NAME}-%{VERSION}-%{RELEASE}' mirivue-kde.spec)"
 shopt -s nullglob
-packages=("RPM/mirivue-kde-1.0.0-0.196.beta1.3.fc44.$(uname -m).rpm")
+packages=("RPM/${package_id}.$(uname -m).rpm")
 [[ ${#packages[@]} == 1 && -f "${packages[0]}" ]] || { echo 'Construire le RPM auparavant avec bash Construire-RPM.sh' >&2; exit 1; }
 # Installer d'abord : un echec DNF laisse l'installation personnelle intacte.
 sudo dnf install "./${packages[0]}"

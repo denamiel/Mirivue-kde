@@ -1,9 +1,11 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version de développement : **1.0.0-beta.1** (préversion).
+Version de développement : **1.0.0-beta.2** (préversion).
 
-## Installer sur Fedora 44 x86_64
+La portée des contrôles et leurs limites sont décrites dans [la validation de la bêta 2](docs/VALIDATION-beta.2.md).
+
+## Installer sur Fedora 44 / 45 x86_64
 
 Les RPM sont disponibles sur [COPR pdenams/Mirivue-kde](https://copr.fedorainfracloud.org/coprs/pdenams/Mirivue-kde/).
 

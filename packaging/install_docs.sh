@@ -6,6 +6,7 @@ source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 destination="${1:?Usage: install_docs.sh DESTINATION}"
 documents=(
   'README.md'
+  'docs/VALIDATION-beta.2.md'
   'LISEZ-MOI-KDE.txt'
   'CHANGELOG.md'
   'packaging/README.md'

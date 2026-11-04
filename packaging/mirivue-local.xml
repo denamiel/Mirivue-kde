@@ -27,9 +27,9 @@
     <content_rating type="oars-1.1" />
     <url type="homepage">https://github.com/denamiel/Mirivue-kde</url>
   <releases>
-      <release version="1.0.0-beta.1" date="2026-10-29" type="development">
+      <release version="1.0.0-beta.2" date="2026-11-05" type="development">
         <description>
-          <p>Add AppStream metadata and local RPM catalog integration.</p>
+          <p>Consolidate file operations, navigation regression tests and incident explanations.</p>
         </description>
       </release>
     </releases>
