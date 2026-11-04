@@ -50,6 +50,18 @@ jobs:
           cd /tmp
           mirivue-kde --version
           dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+      - name: Régressions graphiques transferts, fermeture et sessions
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p tools
+          cp -a /usr/lib64/mirivue-kde/tools/. tools/
+          export XDG_STATE_HOME="$(mktemp -d)"
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          export PYTHONPATH="$PWD:$PWD/tests"
+          for suite in background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui; do
+            dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
+          done
       - name: Signaler une incompatibilité de développement
         if: failure() && matrix.experimental
         run: echo 'Rawhide a échoué. Examiner les dépendances et les tests avant la prochaine migration ; aucun paquet Rawhide n’est publié.' >> "$GITHUB_STEP_SUMMARY"

@@ -474,4 +474,22 @@ class BackgroundTransfers:
         if self.tray is not None and QSystemTrayIcon.isSystemTrayAvailable():
             self.tray.show()
         self.hide()
+        if not getattr(self, '_background_transfer_close_timer', None):
+            timer = QTimer(self)
+            timer.setInterval(250)
+            timer.timeout.connect(self.finish_background_transfer_close)
+            self._background_transfer_close_timer = timer
+        self._background_transfer_close_timer.start()
         return False
+
+    def finish_background_transfer_close(self):
+        timer = self._background_transfer_close_timer
+        if self.isVisible() or self.closing:
+            timer.stop()
+            return
+        if self.pending_transfers():
+            return
+        timer.stop()
+        # Bypass close-to-tray only after the last operation has completed.
+        self.quit_requested = True
+        self.close()

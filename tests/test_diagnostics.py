@@ -44,13 +44,39 @@ class TestDiagnostics(unittest.TestCase):
             state = Path(folder) / 'mirivue'
             state.mkdir()
             marker = state / 'session-2147483647.json'
-            marker.write_text(json.dumps({'pid': 2147483647}), encoding='utf-8')
+            marker.write_text(json.dumps({'pid': 2147483647, 'boot_id': diagnostics._boot_id()}), encoding='utf-8')
             self.assertTrue(diagnostics.begin_session())
             current_marker = state / f'session-{os.getpid()}.json'
             self.assertFalse(marker.exists())
             self.assertTrue(current_marker.is_file())
             diagnostics.end_session()
             self.assertFalse(current_marker.exists())
+
+    def test_old_boot_marker_does_not_claim_a_crash(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_STATE_HOME': folder}), patch.object(diagnostics, '_boot_id', return_value='current'):
+            state = Path(folder) / 'mirivue'
+            state.mkdir()
+            (state / 'session-99.json').write_text(json.dumps({'pid': 99, 'boot_id': 'old'}))
+            self.assertFalse(diagnostics.begin_session())
+            diagnostics.end_session()
+
+    def test_reused_live_pid_is_not_mistaken_for_original_process(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_STATE_HOME': folder}), patch.object(diagnostics, '_boot_id', return_value='current'), patch.object(diagnostics, '_pid_is_running', return_value=True), patch.object(diagnostics, '_process_start', return_value='new'):
+            state = Path(folder) / 'mirivue'
+            state.mkdir()
+            (state / 'session-99.json').write_text(json.dumps({'pid': 99, 'boot_id': 'current', 'process_start': 'old'}))
+            self.assertTrue(diagnostics.begin_session())
+            diagnostics.end_session()
+
+    def test_live_other_instance_keeps_its_marker(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'XDG_STATE_HOME': folder}), patch.object(diagnostics, '_boot_id', return_value='current'), patch.object(diagnostics, '_pid_is_running', return_value=True), patch.object(diagnostics, '_process_start', return_value='same'):
+            state = Path(folder) / 'mirivue'
+            state.mkdir()
+            other = state / 'session-99.json'
+            other.write_text(json.dumps({'pid': 99, 'boot_id': 'current', 'process_start': 'same'}))
+            self.assertFalse(diagnostics.begin_session())
+            diagnostics.end_session()
+            self.assertTrue(other.exists())
 
     def test_logging_is_bounded_and_never_requires_qt(self):
         with tempfile.TemporaryDirectory() as folder:

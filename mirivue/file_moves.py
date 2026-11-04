@@ -89,6 +89,30 @@ def tree_snapshot(path, cancelled=lambda: False, progress=lambda count, current:
     progress(len(output), path)
     return output
 
+def remove_verified_source(source, before):
+    """Remove only inventoried entries; never recursively delete new arrivals.
+
+    This is best-effort protection against external writers, not a filesystem
+    snapshot or a lock on applications that already hold a source file open.
+    """
+    for relative, expected in sorted(before.items(), key=lambda pair: len(Path(pair[0]).parts), reverse=True):
+        entry = source / relative
+        current = entry.lstat()
+        signature = (current.st_dev, current.st_ino, current.st_mode,
+                     current.st_size, current.st_mtime_ns,
+                     os.readlink(entry) if entry.is_symlink() else '')
+        if stat.S_ISDIR(expected[2]):
+            # Removing children changes directory size/mtime. Identity and type
+            # must still match; rmdir refuses any unexpected/new child.
+            if signature[:3] != expected[:3]:
+                raise OSError('Source directory changed during removal')
+            entry.rmdir()
+        else:
+            if signature != expected:
+                raise OSError('Source file changed during removal')
+            entry.unlink()
+
+
 def _move_one(source, target, cancelled=lambda: False, progress=lambda text: None, copy_only=False,
               bytes_progress=lambda done, total: None, before_snapshot=None):
     source = Path(source)
@@ -163,10 +187,9 @@ def _move_one(source, target, cancelled=lambda: False, progress=lambda text: Non
         if copy_only:
             return ''
         try:
-            if source.is_dir() and (not source.is_symlink()):
-                shutil.rmtree(source)
-            else:
-                source.unlink()
+            if tree_snapshot(source) != before:
+                raise OSError('Source changed after destination publication')
+            remove_verified_source(source, before)
         except OSError:
             return tr('La copie est disponible à destination, mais la source n’a pas pu être entièrement supprimée. Vérifiez les deux emplacements.')
         return ''
@@ -299,4 +322,11 @@ class MoveWorker(QThread):
                 else:
                     message = str(error)
                 self.errors.append(trf('\x1f0\x1f : \x1f1\x1f', source.name, message))
+            except Exception as error:
+                # A programming/backend failure must be visible as a failed
+                # operation, never a successful zero-item transfer.
+                from .diagnostics import _logger
+                _logger().exception('Unexpected file transfer failure')
+                self.errors.append(str(error) or type(error).__name__)
+                break
             self.progress.emit((i + 1) * 1000, len(self.plans) * 1000, tr('Copie en cours') if self.copy_only else tr('Déplacement en cours'))

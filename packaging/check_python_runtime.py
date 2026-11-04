@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TESTS = (
     'atomic_io', 'archive_security', 'batch_rename_existing_names',
     'execution', 'paste_behavior', 'runtime_tasks', 'safe_metadata_backup',
-    'recursive_search', 'window_geometry',
+    'recursive_search', 'window_geometry', 'diagnostics',
+    'stability_regressions',
 )
 
 

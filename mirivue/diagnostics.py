@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 from importlib import metadata as package_metadata
 import json
@@ -147,6 +148,15 @@ def _boot_id() -> str | None:
         return None
 
 
+def _process_start(pid: int) -> str | None:
+    try:
+        # comm may contain spaces or parentheses; fields follow its last ')'.
+        fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+        return fields[19]  # Linux proc field 22, starttime
+    except (OSError, IndexError):
+        return None
+
+
 def begin_session() -> bool:
     """Create a PID marker and report whether an earlier process ended abruptly."""
     global _session_marker
@@ -156,30 +166,36 @@ def begin_session() -> bool:
     boot_id = _boot_id()
     try:
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
-        for old_marker in folder.glob("session-*.json"):
-            if old_marker == marker:
-                continue
-            try:
-                payload = json.loads(old_marker.read_text(encoding="utf-8"))
-                previous_pid = int(payload.get("pid", 0))
-                previous_boot = payload.get("boot_id")
-                old_boot = bool(boot_id and previous_boot and previous_boot != boot_id)
-                stale = old_boot or not _pid_is_running(previous_pid)
-                report_unclean = bool(boot_id and previous_boot == boot_id)
-            except (OSError, ValueError, TypeError, json.JSONDecodeError):
-                stale = True
-                report_unclean = False
-            if stale:
-                previous_unclean = previous_unclean or report_unclean
-                if not report_unclean:
-                    _logger().info('Ancien marqueur de session nettoyé sans conclure à un plantage : %s', old_marker.name)
+        with (folder / 'sessions.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            for old_marker in folder.glob("session-*.json"):
+                if old_marker == marker:
+                    continue
                 try:
-                    old_marker.unlink()
-                except OSError:
-                    pass
-        marker.write_text(json.dumps({"pid": os.getpid(), "boot_id": boot_id}), encoding="utf-8")
-        os.chmod(marker, 0o600)
-        _session_marker = marker
+                    payload = json.loads(old_marker.read_text(encoding="utf-8"))
+                    previous_pid = int(payload.get("pid", 0))
+                    previous_boot = payload.get("boot_id")
+                    old_boot = bool(boot_id and previous_boot and previous_boot != boot_id)
+                    start = payload.get('process_start')
+                    current_start = _process_start(previous_pid)
+                    reused = bool(start and current_start and start != current_start)
+                    stale = old_boot or reused or not _pid_is_running(previous_pid)
+                    report_unclean = bool(boot_id and previous_boot == boot_id)
+                except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                    stale = True
+                    report_unclean = False
+                if stale:
+                    previous_unclean = previous_unclean or report_unclean
+                    if not report_unclean:
+                        _logger().info('Ancien marqueur de session nettoyé sans conclure à un plantage : %s', old_marker.name)
+                    try:
+                        old_marker.unlink()
+                    except OSError:
+                        pass
+            marker.write_text(json.dumps({"pid": os.getpid(), "boot_id": boot_id,
+                                          "process_start": _process_start(os.getpid())}), encoding="utf-8")
+            os.chmod(marker, 0o600)
+            _session_marker = marker
     except OSError:
         _logger().exception("Impossible de créer le marqueur de session")
     if previous_unclean:
