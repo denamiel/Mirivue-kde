@@ -139,29 +139,45 @@ def _pid_is_running(pid: int) -> bool:
     return True
 
 
+def _boot_id() -> str | None:
+    """Identify this Linux boot without relying on reused process IDs."""
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
+
+
 def begin_session() -> bool:
     """Create a PID marker and report whether an earlier process ended abruptly."""
     global _session_marker
     folder = state_directory()
     marker = folder / f"session-{os.getpid()}.json"
     previous_unclean = False
+    boot_id = _boot_id()
     try:
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         for old_marker in folder.glob("session-*.json"):
             if old_marker == marker:
                 continue
             try:
-                previous_pid = int(json.loads(old_marker.read_text(encoding="utf-8")).get("pid", 0))
-                stale = not _pid_is_running(previous_pid)
+                payload = json.loads(old_marker.read_text(encoding="utf-8"))
+                previous_pid = int(payload.get("pid", 0))
+                previous_boot = payload.get("boot_id")
+                old_boot = bool(boot_id and previous_boot and previous_boot != boot_id)
+                stale = old_boot or not _pid_is_running(previous_pid)
+                report_unclean = bool(boot_id and previous_boot == boot_id)
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 stale = True
+                report_unclean = False
             if stale:
-                previous_unclean = True
+                previous_unclean = previous_unclean or report_unclean
+                if not report_unclean:
+                    _logger().info('Ancien marqueur de session nettoyé sans conclure à un plantage : %s', old_marker.name)
                 try:
                     old_marker.unlink()
                 except OSError:
                     pass
-        marker.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+        marker.write_text(json.dumps({"pid": os.getpid(), "boot_id": boot_id}), encoding="utf-8")
         os.chmod(marker, 0o600)
         _session_marker = marker
     except OSError:
