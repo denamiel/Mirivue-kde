@@ -97,3 +97,30 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python packaging/check_python_runtime.py
+
+  publish:
+    name: Publier dans COPR après les contrôles obligatoires
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [rpm, python]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: copr-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Avancer uniquement la version testée sans écraser la publication
+        env:
+          TESTED_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch origin main publication
+          # A newer main commit must pass its own checks before publication.
+          if [ "$(git rev-parse origin/main)" != "$TESTED_COMMIT" ]; then
+            echo 'Une version plus récente attend sa propre validation.'
+            exit 0
+          fi
+          git merge-base --is-ancestor origin/publication "$TESTED_COMMIT"
+          git push origin "$TESTED_COMMIT:refs/heads/publication"
