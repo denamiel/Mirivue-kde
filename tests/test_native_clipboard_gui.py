@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMimeData, QTimer, QUrl
 from PySide6.QtGui import QImage, QColor
-from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QComboBox
+from PySide6.QtWidgets import QDialog, QLineEdit, QAbstractButton, QComboBox
 from PySide6.QtTest import QTest
 import test_dolphin_parity_gui as parity
 from mirivue.platform_services import services
@@ -20,9 +20,22 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
 
     def wait_for(self, predicate):
         end = time.monotonic() + 8
-        while not predicate() and time.monotonic() < end:
-            self.app.processEvents()
-            QTest.qWait(10)
+        timed_out = []
+        watchdog = QTimer(self.window)
+        def unblock_timeout():
+            modal = self.app.activeModalWidget()
+            if time.monotonic() >= end and isinstance(modal, QDialog):
+                timed_out.append((modal.metaObject().className(), modal.windowTitle()))
+                modal.reject()
+        watchdog.timeout.connect(unblock_timeout)
+        watchdog.start(50)
+        try:
+            while not predicate() and time.monotonic() < end:
+                self.app.processEvents()
+                QTest.qWait(10)
+        finally:
+            watchdog.stop()
+        self.assertFalse(timed_out, str(timed_out))
         self.assertTrue(predicate(), 'native clipboard job did not finish')
 
     def text(self, value='Été 日本 — Mirivue'):
@@ -59,7 +72,7 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
             elif conflict == 'cancel':
                 modal.reject()
             else:
-                button = next((b for b in modal.findChildren(QPushButton)
+                button = next((b for b in modal.findChildren(QAbstractButton)
                                if 'overwrite' in b.text().replace('&','').lower()), None)
                 if button: button.click()
         timer.timeout.connect(answer)
