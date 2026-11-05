@@ -112,7 +112,10 @@ class TestNativeFileManagement(unittest.TestCase):
         dialog = self.window.basic_properties()
         edits = [edit for edit in dialog.findChildren(QLineEdit) if edit.text() == path.name]
         self.assertTrue(edits)
-        self.assertTrue(all(edit.isReadOnly() for edit in edits))
+        # KDE replaces the name editor with a label for read-only names.
+        self.assertTrue(all(not edit.isVisible() or edit.isReadOnly() for edit in edits))
+        self.assertTrue(any(label.isVisible() and label.text() == path.name
+                            for label in dialog.findChildren(QLabel)))
         dialog.reject()
         self.assertTrue(companion(path).exists())
 

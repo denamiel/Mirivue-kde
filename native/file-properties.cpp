@@ -34,7 +34,7 @@ extern "C" void *mirivue_properties_create(void *parent, const char *urlsJson,
     }
     auto *dialog = new KPropertiesDialog(items, static_cast<QWidget *>(parent));
     dialog->setWindowModality(Qt::WindowModal);
-    dialog->setFileNameReadOnly(nameReadOnly);
+    if (nameReadOnly) dialog->setFileNameReadOnly(true);
     QObject::connect(dialog, &KPropertiesDialog::applied, dialog, [dialog, urls, notify]() mutable {
         QJsonArray renamed, current;
         const auto items = dialog->items();
