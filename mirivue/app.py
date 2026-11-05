@@ -7,7 +7,6 @@ import shutil
 import sys
 import ctypes
 import ctypes.util
-import stat as stat_module
 from urllib.parse import unquote
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPoint, QSortFilterProxyModel, Qt, QThread, Signal, QUrl, QSettings, QTimer, QDir, QFile, QItemSelectionModel, QProcess, QFileSystemWatcher, QEvent, QSize, QStorageInfo, QMimeDatabase, QLockFile, QStandardPaths
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QIcon, QShortcut, QKeySequence, QColor, QFont, QAction, QPixmap, QPalette, QActionGroup
@@ -66,7 +65,6 @@ from .health import explain_error
 from .thumbnails import ThumbnailWorker
 from .renaming import PRESETS, batch_names, prepare_names, external_command, find_external_renames, folder_rename_rows
 from .execution import is_executable_text_file
-from .permissions import add_permissions_tab, apply_permissions
 from .organization import OrganizationMixin
 from .background_listing import RecursiveSearchWorker, KioRemoteSearchWorker, listed_media_entry, FolderSizeWorker
 from . import __version__
@@ -344,27 +342,32 @@ class Scanner(QThread):
         self.requestInterruption()
 
     def run(self):
+        from .directory_listing import local_entries
+        from .media import AUDIO_EXT, IMAGE_EXT
+        media_extensions = EXTENSIONS | AUDIO_EXT | IMAGE_EXT
         try:
-            from .media import AUDIO_EXT, IMAGE_EXT
-            media_extensions = EXTENSIONS | AUDIO_EXT | IMAGE_EXT
-            listed = []
-            resolved = []
-
-            def send_listed():
-                nonlocal listed
-                if listed:
-                    self.listed.emit(listed)
-                    listed = []
-
-            def send_resolved():
-                nonlocal resolved
-                if resolved:
-                    self.resolved.emit(resolved)
-                    resolved = []
-
-            def walk_error(error):
-                self.notice.emit(str(error))
-            for root, dirs, files in os.walk(self.folder, onerror=walk_error, followlinks=False):
+            initial = []
+            for path, is_dir, hidden in local_entries(self.folder, self.isInterruptionRequested):
+                if hidden and not self.show_hidden:
+                    continue
+                try:
+                    entry = basic_entry(path, True, hidden=hidden) if is_dir else listed_media_entry(path, self.isInterruptionRequested, hidden=hidden)
+                    if is_dir:
+                        entry.values[1], entry.sort_values[1] = '', -1
+                    update_modification(entry)
+                    initial.append(entry)
+                except OSError:
+                    continue
+            initial.sort(key=lambda entry: natural_name_key(entry.path.name))
+            if self.isInterruptionRequested():
+                return
+            self.initial.emit(initial)
+            if not self.recursive:
+                return
+            # This specialised media discovery retains bounded os.walk traversal;
+            # the ordinary visible root always comes from KCoreDirLister.
+            listed, resolved = [], []
+            for root, dirs, files in os.walk(self.folder, onerror=lambda error: self.notice.emit(str(error)), followlinks=False):
                 if self.isInterruptionRequested():
                     return
                 hidden = hidden_names(root)
@@ -372,57 +375,37 @@ class Scanner(QThread):
                     dirs[:] = [name for name in dirs if not local_is_hidden(Path(root) / name, hidden)]
                     files = [name for name in files if not local_is_hidden(Path(root) / name, hidden)]
                 if Path(root) == Path(self.folder):
-                    # Build the first visible directory listing in display
-                    # order before sending any rows. Streaming arbitrary
-                    # os.walk order makes QListView::Adjust move icons every
-                    # time an earlier name arrives.
-                    initial = []
-                    for name in sorted(dirs):
-                        folder_path = Path(root) / name
-                        entry = basic_entry(folder_path, True, hidden=local_is_hidden(folder_path, hidden))
-                        # Dolphin leaves the folder-size field empty until the
-                        # asynchronous count is available.  A textual loading
-                        # state makes every row change twice and is visually
-                        # noisy in an otherwise stable directory listing.
-                        entry.values[1] = ''
-                        entry.sort_values[1] = -1
-                        initial.append(entry)
+                    continue
                 for name in files:
                     if self.isInterruptionRequested():
                         return
                     path = Path(root) / name
-                    if Path(root) == Path(self.folder):
-                        try:
-                            entry = listed_media_entry(path, self.isInterruptionRequested, hidden=local_is_hidden(path, hidden)) if path.suffix.lower() in media_extensions else basic_entry(path, hidden=local_is_hidden(path, hidden))
-                            update_modification(entry)
-                            initial.append(entry)
-                        except OSError:
-                            pass
-                    elif path.suffix.lower() in media_extensions:
-                        try:
-                            entry = listed_media_entry(path, self.isInterruptionRequested, hidden=local_is_hidden(path, hidden))
-                            update_modification(entry)
-                            if entry.metadata_loaded:
-                                resolved.append(entry)
-                                if len(resolved) >= 32:
-                                    send_resolved()
-                            else:
-                                listed.append(entry)
-                        except OSError:
-                            pass
+                    if path.suffix.lower() not in media_extensions:
+                        continue
+                    try:
+                        entry = listed_media_entry(path, self.isInterruptionRequested, hidden=local_is_hidden(path, hidden))
+                        update_modification(entry)
+                        if entry.metadata_loaded:
+                            resolved.append(entry)
+                        else:
+                            listed.append(entry)
+                        if len(resolved) >= 32:
+                            self.resolved.emit(resolved)
+                            resolved = []
                         if len(listed) >= 128:
-                            send_listed()
-                if Path(root) == Path(self.folder):
-                    initial.sort(key=lambda entry: natural_name_key(entry.path.name))
-                    # Publish one coherent inventory like Dolphin's file
-                    # model, instead of visibly moving rows after each batch.
-                    self.initial.emit(initial)
-                if not self.recursive:
-                    break
-            send_listed()
-            send_resolved()
+                            self.listed.emit(listed)
+                            listed = []
+                    except OSError:
+                        continue
+            if listed:
+                self.listed.emit(listed)
+            if resolved:
+                self.resolved.emit(resolved)
+        except InterruptedError:
+            return
         except Exception as error:
-            self.notice.emit(str(error))
+            if not self.isInterruptionRequested():
+                self.notice.emit(str(error))
 
 
 
@@ -4650,80 +4633,17 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
                 self.open_url(folder)
 
     def basic_properties(self):
-        rows = [self.row(index) for index in self.selected_indexes()]
-        if not rows:
+        paths = self.selected_entries()
+        if not paths:
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr('Propriétés'))
-        dialog.resize(620, 430)
-        layout = QVBoxLayout(dialog)
-        tabs = QTabWidget(dialog)
-        general_page = QWidget(tabs)
-        form = QFormLayout(general_page)
-        tabs.addTab(general_page, tr('Général'))
-        layout.addWidget(tabs)
-        permission_path = None
-        original_mode = None
-        requested_mode = [None]
-        if len(rows) > 1:
-            form.addRow(tr('Éléments sélectionnés'), QLabel(str(len(rows))))
-            form.addRow(tr('Dossiers'), QLabel(str(sum((row.is_dir for row in rows)))))
-            form.addRow(tr('Fichiers'), QLabel(str(sum((not row.is_dir for row in rows)))))
-            form.addRow(tr('Emplacement'), QLabel(str(Path(self.folder or ''))))
-        else:
-            row = rows[0]
-            path = row.path
-            if Location.from_value(path).is_uri:
-                form.addRow(tr('Nom'), QLabel(str(row.values[0])))
-                form.addRow(tr('Type'), QLabel(str(row.values[10])))
-                form.addRow(tr('Emplacement'), QLabel(str(path)))
-                if not row.is_dir:
-                    form.addRow(tr('Taille'), QLabel(str(row.values[1])))
-                buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-                buttons.rejected.connect(dialog.reject)
-                buttons.accepted.connect(dialog.accept)
-                layout.addWidget(buttons)
-                dialog.exec()
-                dialog.deleteLater()
-                return
-            else:
-                permission_path = path
-            try:
-                info = path.lstat()
-                size = quantity(info.st_size, [tr('o'), tr('Kio'), tr('Mio'), tr('Gio'), tr('Tio')], 1024)
-                original_mode = stat_module.S_IMODE(info.st_mode)
-                requested_mode[0] = original_mode
-            except OSError:
-                size = tr('Indisponible')
-                info = None
-            mime = QMimeDatabase().mimeTypeForFile(str(path)).comment() if not row.is_dir else tr('Dossier')
-            form.addRow(tr('Nom'), QLabel(path.name or str(path)))
-            form.addRow(tr('Type'), QLabel(mime))
-            form.addRow(tr('Taille'), QLabel(size if not row.is_dir else row.values[1]))
-            form.addRow(tr('Modifié'), QLabel(modification_text(row.modified_ns, mode=self.model.date_format) if row.modified_ns is not None else tr('Indisponible')))
-            location = QLineEdit(str(path))
-            location.setReadOnly(True)
-            form.addRow(tr('Emplacement'), location)
-
-            if permission_path is not None and info is not None:
-                add_permissions_tab(tabs, dialog, info, requested_mode, tr, trf)
-
-        standards = (QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-                     if permission_path is not None and original_mode is not None
-                     else QDialogButtonBox.StandardButton.Close)
-        buttons = QDialogButtonBox(standards)
-        buttons.rejected.connect(dialog.reject)
-        buttons.accepted.connect(dialog.accept)
-        layout.addWidget(buttons)
-        if dialog.exec() == QDialog.DialogCode.Accepted and permission_path is not None \
-                and original_mode is not None and requested_mode[0] != original_mode:
-            try:
-                apply_permissions(permission_path, requested_mode[0])
-                self.show_activity_message(tr('Droits d’accès modifiés.'), 4000)
-                self.refresh_current_view()
-            except OSError as error:
-                QMessageBox.critical(self, tr('Modification impossible'), str(error))
-        dialog.deleteLater()
+        if self.movement_locked(paths):
+            QMessageBox.information(self, tr('Opération en cours'), tr('Attendez la fin du traitement avant de modifier les propriétés.'))
+            return
+        from .native_properties import show_properties
+        try:
+            return show_properties(self, paths)
+        except (OSError, AttributeError) as error:
+            QMessageBox.warning(self, tr('Propriétés indisponibles'), str(error))
 
     def open_terminal_here(self):
         if not self.folder:
@@ -5197,6 +5117,16 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         if any((p.issue for p in plans)):
             QMessageBox.warning(self, tr('Renommage impossible'), tr('\n').join((p.issue for p in plans if p.issue)))
             return False
+        from .native_properties import has_media_companion
+        if not has_media_companion(path):
+            pane = self.bound_pane
+            target = plans[0].destination
+            def before_refresh():
+                if not getattr(pane, '_closed', False):
+                    self.run_in_pane_silent(pane, lambda: self.update_renamed_rows({path: target}, reset=False))
+            return self.start_kio_transfer([QUrl.fromLocalFile(str(path)).toString()],
+                QUrl.fromLocalFile(str(target)).toString(), move=True, operation='moveas',
+                before_refresh=before_refresh) is not None
         renamed, errors = apply_renames(plans)
         if errors:
             QMessageBox.warning(self, tr('Renommage impossible'), tr('\n').join(errors))
@@ -5359,19 +5289,7 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             self.show_activity_message(trf('\x1f0\x1f nom(s) mis à jour après renommage externe.', len(renamed)), 6000)
 
     def visible_folder_snapshot(self, folder):
-        tr('Return a cheap direct-child signature without reading media metadata.')
-        path = Path(folder)
-        result = {}
-        try:
-            for child in path.iterdir():
-                try:
-                    stat = child.stat()
-                    result[child] = (child.is_dir(), stat.st_mtime_ns, stat.st_size)
-                except OSError:
-                    continue
-        except OSError:
-            return None
-        return result
+        return getattr(self, '_directory_inventory', {}).get(Path(folder))
 
     def is_network_location(self, folder):
         tr('Never poll a remote mount from the GUI thread after it disappears.')
@@ -5408,6 +5326,30 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
     def sync_visible_directories(self):
         if self.closing:
             return
+        if getattr(self, '_directory_snapshot_worker', None) is not None:
+            self._directory_snapshot_pending = True
+            return
+        if any(p.scanning for p in self.panes) or self.move_worker is not None or getattr(self, '_metadata_worker', None):
+            self.visible_timer.start()
+            return
+        from .directory_listing import DirectorySnapshotWorker
+        worker = DirectorySnapshotWorker(self._visible_snapshots)
+        self._directory_snapshot_worker = worker
+        def finished():
+            self._directory_snapshot_worker = None
+            if not self.closing:
+                self._directory_inventory = worker.snapshots
+                self.reconcile_visible_directories()
+                if getattr(self, '_directory_snapshot_pending', False):
+                    self._directory_snapshot_pending = False
+                    self.visible_timer.start()
+            worker.deleteLater()
+        worker.finished.connect(finished)
+        self.start_runtime_worker(worker, tr('Actualisation des dossiers'))
+
+    def reconcile_visible_directories(self):
+        if self.closing:
+            return
         if any((p.scanning for p in getattr(self, tr('panes'), []))) or self.move_worker is not None or getattr(self, tr('_metadata_worker'), None):
             self.visible_timer.start()
             return
@@ -5435,6 +5377,11 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
                                and row.path.name not in current_names
                                and not row.path.exists() and not row.path.is_symlink())
             if old is None:
+                known = {row.path: row for pane in self.panes if pane.folder and Path(pane.folder).resolve() == folder for row in pane.model.rows}
+                changed.update(path for path, value in current.items()
+                               if path not in known or not known[path].file_signature
+                               or known[path].file_signature[2:] != (value[2], value[1])
+                               or known[path].is_hidden != value[3])
                 continue
             changed.update((path for path, value in current.items() if old.get(path) != value))
             removed.update((path for path in old if path not in current))
@@ -5491,10 +5438,7 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
                     direct.add(path)
                     snapshot = self._visible_snapshots.get(Path(pane.folder).resolve())
                     if snapshot is not None:
-                        try:
-                            snapshot[path] = (path.is_dir(), path.stat().st_mtime_ns, path.stat().st_size)
-                        except OSError:
-                            snapshot.pop(path, None)
+                        snapshot.pop(path, None)
         self.inspect_visible_entries(direct)
 
     def apply_visible_entry(self, row):

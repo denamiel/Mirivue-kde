@@ -317,18 +317,32 @@ class PlatformServices:
             return False
         return bool(QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))))
 
-    def list_kio_location(self, location: str) -> list[dict] | None:
-        """Return a structured KIO directory listing when the native bridge is available."""
-        tool = self.tool_path(tr('mirivue-kio-list'))
+    def list_kio_location(self, location: str, cancelled=None) -> list[dict] | None:
+        """The shared KCoreDirLister backend, with bounded cancellable lifetime."""
+        tool = self.tool_path('mirivue-kio-list')
         if not tool or not str(location).strip():
             return None
+        cancelled = cancelled or (lambda: False)
+        if cancelled():
+            return None
         try:
-            result = subprocess.run([tool, str(location)], check=False, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0 or not result.stdout.strip():
-                return None
-            payload = json.loads(result.stdout.splitlines()[-1])
-            return payload.get(tr('entries'), []) if payload.get(tr('ok')) else None
-        except (OSError, ValueError, subprocess.TimeoutExpired):
+            with subprocess.Popen([tool, str(location)], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+                started = time.monotonic()
+                while True:
+                    if cancelled() or time.monotonic() - started > 30:
+                        process.kill()
+                        process.communicate()
+                        return None
+                    try:
+                        output, _error = process.communicate(timeout=0.05)
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+                if process.returncode or not output.strip():
+                    return None
+                payload = json.loads(output.splitlines()[-1])
+                return payload.get('entries', []) if payload.get('ok') else None
+        except (OSError, ValueError):
             return None
 
     def _update_kio_undo_state(self, available, text):

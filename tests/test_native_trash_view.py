@@ -37,7 +37,7 @@ class TestNativeTrashView(unittest.TestCase):
         self.assertIn('folders = [row.path for row in rows if row.is_dir]', open_selected)
         self.assertIn('remote_files = [path for path in files if Location.from_value(path).is_uri]', open_selected)
         properties = self.app.split('    def basic_properties(', 1)[1].split('    def force_metadata', 1)[0]
-        self.assertIn('if Location.from_value(path).is_uri:', properties)
+        self.assertIn('show_properties(self, paths)', properties)
 
     def test_native_places_trash_job_reports_completion_to_all_panes(self):
         self.assertIn('KIO::DeleteOrTrashJob', self.places)

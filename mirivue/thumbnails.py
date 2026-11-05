@@ -107,6 +107,27 @@ def capture(command, cancelled, timeout=8):
             process.kill()
             process.communicate()
 
+def native_preview_data(path, cancelled=lambda: False, size=None, video_fallback=False):
+    helper = services.tool_path('mirivue-kio-preview')
+    if not helper:
+        return b''
+    arguments = [helper]
+    if video_fallback:
+        arguments.append('--video-fallback')
+    if size:
+        arguments += ['--size', str(size.width()), str(size.height())]
+    arguments.append(str(Path(path).absolute()))
+    for line in capture(arguments, cancelled, 20).splitlines():
+        try:
+            item = json.loads(line)
+            if Path(item.get('path', '')).absolute() == Path(path).absolute():
+                data = base64.b64decode(item.get('png', ''), validate=True)
+                if data:
+                    return data
+        except (ValueError, TypeError, KeyError):
+            continue
+    return b''
+
 def make_preview(path, cancelled=lambda: False, force=False):
     path = Path(path)
     signature = fingerprint(path)
@@ -130,30 +151,13 @@ def make_preview(path, cancelled=lambda: False, force=False):
         return (signature, data)
     if path.suffix.lower() not in VIDEO_EXT:
         return (signature, None)
-    duration = 0
-    try:
-        info = json.loads(capture([tr('ffprobe'), tr('-v'), tr('error'), tr('-protocol_whitelist'), tr('file'), tr('-show_entries'), tr('format=duration'), tr('-of'), tr('json'), str(path)], cancelled, 5))
-        duration = float(info.get(tr('format'), {}).get(tr('duration'), 0))
-    except (ValueError, TypeError, TimeoutError):
-        pass
-    positions = [duration * p for p in (0.1, 0.35, 0.6, 0.85)] if duration > 0 else [5, 20, 60, 0]
-    best = None
-    best_score = -1
-    for position in positions:
-        try:
-            data = capture([tr('ffmpeg'), tr('-v'), tr('error'), tr('-nostdin'), tr('-ss'), str(position), tr('-protocol_whitelist'), tr('file'), tr('-i'), str(path), tr('-map'), tr('0:v:0'), tr('-frames:v'), tr('1'), tr('-vf'), tr('scale=320:200:force_original_aspect_ratio=decrease'), tr('-threads'), tr('1'), tr('-f'), tr('image2pipe'), tr('-vcodec'), tr('png'), tr('pipe:1')], cancelled)
-        except TimeoutError:
-            continue
-        score = image_score(QImage.fromData(data))
-        if score > best_score:
-            best_score, best = (score, data)
-        if score >= 18:
-            break
+    data = native_preview_data(path, cancelled, video_fallback=True)
     if fingerprint(path) != signature or cancelled():
         return (signature, None)
-    if best:
-        store_preview(path, signature, best)
-    return (signature, best)
+    if data:
+        store_preview(path, signature, data)
+    return (signature, data)
+
 
 class ThumbnailWorker(QThread):
     ready = Signal(object, object, bytes)
@@ -193,7 +197,6 @@ class ThumbnailWorker(QThread):
         # standard shared cache. Its signals let us publish each result as it
         # arrives instead of waiting for one subprocess per file.
         kio_results = {}
-        native_completed = False
         helper = services.tool_path('mirivue-kio-preview')
         if helper and pending and not self.isInterruptionRequested():
             try:
@@ -245,7 +248,6 @@ class ThumbnailWorker(QThread):
                     except (KeyError, TypeError, ValueError, OSError):
                         pass
                 process.wait()
-                native_completed = process.returncode == 0
             except (OSError, subprocess.SubprocessError):
                 pass
 
@@ -260,9 +262,8 @@ class ThumbnailWorker(QThread):
             from .metadata import EXTENSIONS as VIDEO_EXT
             if Path(path).suffix.lower() not in AUDIO_EXT | IMAGE_EXT | VIDEO_EXT:
                 continue
-            if native_completed and Path(path).suffix.lower() in VIDEO_EXT:
-                # The native helper has already tried the video fallback
-                # after KIO. Repeat in Python only if the helper failed.
+            if Path(path).suffix.lower() in VIDEO_EXT:
+                # One video backend only: KIO and its native FFmpeg fallback.
                 continue
             try:
                 signature, data = make_preview(path, self.isInterruptionRequested, path in self.force_paths)

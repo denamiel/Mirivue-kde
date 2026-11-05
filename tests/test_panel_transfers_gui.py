@@ -281,7 +281,7 @@ class TestPanelTransfersGui(unittest.TestCase):
                     w.watch_visible_directories()
                     with patch.object(w, 'navigate') as navigate:
                         w.native_drop_completed()
-                        self.wait_for(lambda: not w._visible_workers)
+                        self.wait_for(lambda: not w._visible_workers and not getattr(w, "_directory_snapshot_worker", None))
                         self.drain()
                         navigate.assert_not_called()
                     self.assertEqual(path in {r.path for r in source.model.rows}, copy)

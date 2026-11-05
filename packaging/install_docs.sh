@@ -9,6 +9,7 @@ documents=(
   'docs/VALIDATION-beta.2.md'
   'docs/VALIDATION-beta.3.md'
   'docs/VALIDATION-beta.4.md'
+  'docs/VALIDATION-beta.5.md'
   'LISEZ-MOI-KDE.txt'
   'CHANGELOG.md'
   'packaging/README.md'

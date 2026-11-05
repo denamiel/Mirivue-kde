@@ -179,30 +179,13 @@ def media_preview(path, media_type, cancelled=lambda: False, target_size=None):
     elif media_type not in (tr('video'), tr('image')):
         # Use Plasma's configured KIO thumbnailers for documents and text.
         # Unsupported MIME types simply return no preview, as they do in KDE.
-        from .platform_services import services
-        import base64
-        import json
-        from .thumbnails import capture
-        helper = services.tool_path(tr('mirivue-kio-preview'))
+        from .thumbnails import native_preview_data
         size = target_size or QSize(960, 720)
-        width = max(160, min(4096, int(size.width())))
-        height = max(160, min(4096, int(size.height())))
-        if helper:
-            try:
-                output = capture([helper, tr('--size'), str(width), str(height), str(Path(path).absolute())], cancelled, 20)
-                for line in output.splitlines():
-                    try:
-                        item = json.loads(line.decode(tr('utf-8')))
-                        if Path(item.get(tr('path'), '')).absolute() == Path(path).absolute():
-                            data = base64.b64decode(item.get(tr('png'), ''), validate=True)
-                            if data:
-                                image = QImage.fromData(data)
-                                break
-                    except (UnicodeError, ValueError, TypeError):
-                        continue
-            except (OSError, TimeoutError, InterruptedError):
-                if cancelled():
-                    raise InterruptedError()
+        try:
+            image = QImage.fromData(native_preview_data(path, cancelled, size=size))
+        except (OSError, TimeoutError, InterruptedError):
+            if cancelled():
+                raise InterruptedError()
         if image.isNull():
             image = render_text_page(path, size)
     else:

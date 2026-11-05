@@ -410,7 +410,7 @@ class MovementMixin(BackgroundTransfers):
         except OSError:
             return False
 
-    def start_kio_transfer(self, sources, destination, move=False, clipboard_guard=None, operation=None, on_success=None):
+    def start_kio_transfer(self, sources, destination, move=False, clipboard_guard=None, operation=None, on_success=None, before_refresh=None):
         """Run a native KIO job and refresh the affected pane listings."""
         label, failure, success = transfer_labels(operation or ('move' if move else 'copy'))
         if not services.tool_path(tr('mirivue-kio-service')):
@@ -451,6 +451,8 @@ class MovementMixin(BackgroundTransfers):
             if (operation or ('move' if move else 'copy')) not in ('delete', 'restore'):
                 self.record_kio_history()
             self.show_activity_message(success, 5000)
+            if before_refresh is not None:
+                before_refresh()
             transfer_operation = operation or ('move' if move else 'copy')
             if not self.update_local_kio_transfer(sources, destination, transfer_operation, existing_target):
                 self.remember_transfer_selection(sources, destination, transfer_operation)

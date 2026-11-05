@@ -1,6 +1,6 @@
 pkgname=mirivue-kde
 pkgver=@PKGVER@
-pkgrel=2
+pkgrel=1
 pkgdesc='Gestionnaire de fichiers orienté médias pour KDE Plasma'
 arch=('x86_64')
 url='https://github.com/denamiel/Mirivue-kde'

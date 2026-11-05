@@ -1,3 +1,10 @@
+# 1.0.0-beta.5 — 5 novembre 2026
+
+- Propriétés et permissions confiées à KPropertiesDialog ; retrait du dialogue et du chmod spécifiques à Mirivue.
+- Renommage simple sans compagnon via KIO ; conservation du renommage avancé/en masse et de ses transactions XMP.
+- Inventaire ordinaire local/distant commun via KCoreDirLister ; snapshots de surveillance déplacés hors du fil graphique et annulables.
+- Suppression de la génération vidéo FFmpeg dupliquée en Python ; secours natif conservé, rendus images et pochettes audio conservés.
+
 # 1.0.0-beta.4 — 5 novembre 2026
 
 - Collage de texte et images par KIO::paste, comme Dolphin : dialogue natif, formats proposés, conflits et confirmation de remplacement.

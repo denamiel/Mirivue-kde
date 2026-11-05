@@ -19,6 +19,11 @@ int main(int argc, char **argv)
     // Return the fact, and let the requesting pane choose its visibility.
     lister.setAutoErrorHandlingEnabled(false);
     lister.setAutoUpdate(false);
+    if (url.isLocalFile()) {
+        // Ordinary inventory must not sniff every media file before showing it.
+        lister.setDelayedMimeTypes(true);
+        lister.setRequestMimeTypeWhileListing(false);
+    }
     lister.setShowHiddenFiles(true);
     bool done = false;
     auto finish = [&](const QString &error) {
