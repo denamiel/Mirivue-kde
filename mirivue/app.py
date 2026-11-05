@@ -351,7 +351,9 @@ class Scanner(QThread):
                 if hidden and not self.show_hidden:
                     continue
                 try:
-                    entry = basic_entry(path, True, hidden=hidden) if is_dir else listed_media_entry(path, self.isInterruptionRequested, hidden=hidden)
+                    entry = (basic_entry(path, True, hidden=hidden) if is_dir else
+                             listed_media_entry(path, self.isInterruptionRequested, hidden=hidden)
+                             if path.suffix.lower() in media_extensions else basic_entry(path, hidden=hidden))
                     if is_dir:
                         entry.values[1], entry.sort_values[1] = '', -1
                     update_modification(entry)
