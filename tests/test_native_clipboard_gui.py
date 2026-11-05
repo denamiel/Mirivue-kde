@@ -24,7 +24,10 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
         with patch.object(parity.tempfile, 'TemporaryDirectory', home_temporary):
             parity.TestDolphinParity.setUp(self)
         self.assertEqual(self.root.stat().st_dev, Path.home().stat().st_dev)
-    tearDown = parity.TestDolphinParity.tearDown
+    def tearDown(self):
+        # Release Qt-owned Python MIME objects before QApplication teardown.
+        self.app.clipboard().clear()
+        parity.TestDolphinParity.tearDown(self)
     new_window = parity.TestDolphinParity.new_window
     settle = parity.TestDolphinParity.settle
 
