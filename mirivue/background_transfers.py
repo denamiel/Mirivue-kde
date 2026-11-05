@@ -36,6 +36,8 @@ class BackgroundTransfers:
                 locked.append(arrival)
                 if source.isLocalFile() and arrival.isLocalFile():
                     plans.append((Path(source.toLocalFile()), Path(arrival.toLocalFile())))
+        if operation == 'paste':
+            locked.append(target)
         used = {Path(url.toLocalFile()).resolve() for url in locked if url.isLocalFile()}
         job = dict(native=True, worker=worker, sources=list(sources), destination=destination,
                    operation=operation, label=label, plans=plans, copy=operation in ('copy', 'copyas', 'extract', 'link'),
@@ -183,6 +185,8 @@ class BackgroundTransfers:
         self.sync_activity_progress_visibility()
 
     def cancel_transfer(self, job):
+        if not job.get('cancellable', True):
+            return
         worker = job.get('worker')
         if worker is not None and job['state'] in (tr('En attente'), tr('En cours')):
             job['state'] = tr('Arrêt en cours')
@@ -232,7 +236,7 @@ class BackgroundTransfers:
                 item.setText(1, job[tr('state')])
                 item.setText(2, str(len(job['sources'])))
             job = selection()
-            cancel.setEnabled(bool(job and job[tr('state')] in (tr('En attente'), tr('En cours'))))
+            cancel.setEnabled(bool(job and job.get('cancellable', True) and job[tr('state')] in (tr('En attente'), tr('En cours'))))
             stop.setEnabled(bool(self.pending_transfers()))
             terminal = {tr('Interrompu'), tr('À vérifier'), tr('Terminé'), 'Interrompu', 'À vérifier', 'Terminé', 'Interrupted', 'Needs Attention', 'Completed'}
             clear_history.setEnabled(any((j[tr('state')] in terminal for j in self.transfer_history)))

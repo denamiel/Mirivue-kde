@@ -17,7 +17,7 @@ package_id="$(rpmspec -q --srpm --define "dist $dist" --qf '%{NAME}-%{VERSION}-%
 if [[ $mode == binaire ]]; then sudo dnf builddep ./mirivue-kde.spec; fi
 buildtop="$(mktemp -d "$PWD/construction-XXXXXXXX")"
 mkdir -p "$buildtop"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-cp Mirivue-1.0.0-beta.3-KDE.tar.gz valider-appstream.py LICENSE-KIT.txt "$buildtop/SOURCES/"
+cp Mirivue-1.0.0-beta.4-KDE.tar.gz valider-appstream.py LICENSE-KIT.txt "$buildtop/SOURCES/"
 cp mirivue-kde.spec "$buildtop/SPECS/"
 option=-ba
 if [[ $mode == --source-only ]]; then option=-bs; fi
@@ -25,7 +25,7 @@ rpmbuild "$option" --define "_topdir $buildtop" --define "dist $dist" "$buildtop
 source_rpm="$buildtop/SRPMS/${package_id}.src.rpm"
 # Verifier les fichiers effectivement inclus, pas seulement les declarations.
 rpm -qpl "$source_rpm" > "$buildtop/sources-incluses.txt"
-grep -Fxq 'Mirivue-1.0.0-beta.3-KDE.tar.gz' "$buildtop/sources-incluses.txt"
+grep -Fxq 'Mirivue-1.0.0-beta.4-KDE.tar.gz' "$buildtop/sources-incluses.txt"
 grep -Fxq 'valider-appstream.py' "$buildtop/sources-incluses.txt"
 grep -Fxq 'mirivue-kde.spec' "$buildtop/sources-incluses.txt"
 grep -Fxq 'LICENSE-KIT.txt' "$buildtop/sources-incluses.txt"

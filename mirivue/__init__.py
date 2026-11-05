@@ -1,4 +1,4 @@
-__version__ = '1.0.0-beta.3'
+__version__ = '1.0.0-beta.4'
 RELEASE_DATE = '5 novembre 2026'
 AUTHOR = 'pdenams'
 BUILD_REVISION = 'sources'

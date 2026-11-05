@@ -1,3 +1,10 @@
+# 1.0.0-beta.4 — 5 novembre 2026
+
+- Collage de texte et images par KIO::paste, comme Dolphin : dialogue natif, formats proposés, conflits et confirmation de remplacement.
+- Suppression du writer Python spécifique au presse-papiers ; intégration du collage à l’historique natif et au suivi de fermeture en arrière-plan.
+- Tests réels des dialogues, contenus, annulation et historique mélangé avec les transferts KIO.
+- Extraction RAR conservée : Ark effectue toujours la décompression avec les contrôles existants.
+
 # 1.0.0-beta.3 — 5 novembre 2026
 
 - Suppression de l’ancien moteur Python de copie/déplacement, déjà inutilisé par les commandes de l’interface. KIO reste le moteur des transferts ordinaires.

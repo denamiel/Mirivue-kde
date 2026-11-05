@@ -104,6 +104,7 @@ class MovementMixin(BackgroundTransfers):
         KIO owns the operation and its choice menu. Observe the actual files
         rather than guessing whether the user chose Copy, Move or Link.
         """
+        self.record_main_kio_history()
         self.sync_visible_directories()
         for pane in self.panes:
             if not pane.folder:
@@ -171,6 +172,9 @@ class MovementMixin(BackgroundTransfers):
         return True
 
     def undo_remote_transfer(self):
+        if self.file_undo_history() and self.file_undo_history()[-1][0] == "main-kio":
+            self.apply_main_kio_history(True)
+            return
         if self.file_undo_history() and self.file_undo_history()[-1][0] == 'rename':
             self.apply_local_rename_history(True)
             return
@@ -202,6 +206,9 @@ class MovementMixin(BackgroundTransfers):
         self.start_runtime_worker(worker, tr('Annulation KIO'))
 
     def redo_kio_operation(self):
+        if self.file_redo_history() and self.file_redo_history()[-1][0] == "main-kio":
+            self.apply_main_kio_history(False)
+            return
         if self.file_redo_history() and self.file_redo_history()[-1][0] == 'rename':
             self.apply_local_rename_history(False)
             return

@@ -79,7 +79,7 @@ add_executable(mirivue-kio-places kio-places.cpp)
 target_link_libraries(mirivue-kio-places PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets KF6::KIOFileWidgets)
 
 add_library(mirivue-kio-places-widget SHARED kio-places-widget.cpp)
-target_sources(mirivue-kio-places-widget PRIVATE terminal-widget.cpp path-navigator.cpp context-menu-settings.cpp toolbar-editor.cpp desktop-dialogs.cpp open-with-menu.cpp)
+target_sources(mirivue-kio-places-widget PRIVATE terminal-widget.cpp path-navigator.cpp context-menu-settings.cpp toolbar-editor.cpp desktop-dialogs.cpp open-with-menu.cpp clipboard-paste.cpp)
 target_link_libraries(mirivue-kio-places-widget PRIVATE Qt6::Widgets Qt6::Xml KF6::KIOFileWidgets KF6::KIOWidgets KF6::JobWidgets KF6::ConfigCore KF6::ConfigWidgets KF6::ColorScheme KF6::IconThemes KF6::XmlGui KF6::Parts KF6::CoreAddons KF6::WindowSystem KF6::Service KF6::NewStuffWidgets)
 
 install(TARGETS mirivue-kio-list mirivue-kio-open mirivue-kio-applications mirivue-kio-empty-trash mirivue-kio-transfer mirivue-kio-service mirivue-kio-preview mirivue-kio-places mirivue-job-progress

@@ -1,9 +1,9 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version de développement : **1.0.0-beta.3** (préversion).
+Version de développement : **1.0.0-beta.4** (préversion).
 
-La portée des contrôles et leurs limites sont décrites dans [la validation de la bêta 3](docs/VALIDATION-beta.3.md).
+La portée des contrôles et leurs limites sont décrites dans [la validation de la bêta 4](docs/VALIDATION-beta.4.md).
 
 ## Installer sur Fedora 44 / 45 x86_64
 
@@ -48,6 +48,9 @@ Les copies et déplacements ordinaires utilisent **KIO**, y compris les opérati
 Il n’existe pas de reprise automatique par un second moteur en cas d’échec.
 Les contrôles SHA-256 des tests vérifient leurs résultats ; ils ne sont pas
 une vérification intégrale ajoutée à chaque transfert utilisateur.
+
+Le collage de texte ou d’image utilise le dialogue natif KDE. En cas de conflit,
+KDE permet de renommer, annuler ou confirmer le remplacement du fichier existant.
 
 ## Fonctions
 

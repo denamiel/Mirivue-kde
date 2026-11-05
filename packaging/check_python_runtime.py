@@ -12,7 +12,7 @@ TESTS = (
     'atomic_io', 'archive_security', 'batch_rename_existing_names',
     'execution', 'paste_behavior', 'runtime_tasks', 'safe_metadata_backup',
     'recursive_search', 'window_geometry', 'diagnostics',
-    'stability_regressions', 'stability_check', 'release_contract', 'beta3_release',
+    'stability_regressions', 'stability_check', 'release_contract', 'beta4_release',
     'kio_request_cancellation', 'cancelled_kio_conflict', 'kio_engine_contract',
 )
 

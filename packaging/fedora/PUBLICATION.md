@@ -2,8 +2,8 @@
 
 ## Références de version
 
-Version visible : **1.0.0-beta.3**. Dans la recette actuelle de `main` :
-`Version: 1.0.0` et `Release: 0.198.beta3.1%{?dist}`.
+Version visible : **1.0.0-beta.4**. Dans la recette actuelle de `main` :
+`Version: 1.0.0` et `Release: 0.199.beta4.1%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
 Historiquement, la révision 3 a ajouté les guides corrigés sous `/usr/share/doc/mirivue-kde/`
 et permet leur distribution par une mise à jour DNF.
@@ -77,4 +77,4 @@ il utilise les commits `main` validés, pas la branche COPR `publication`.
 
 - https://docs.copr.fedorainfracloud.org/user_documentation.html#webhooks
 
-La grille des contrôles de consolidation figure dans `docs/VALIDATION-beta.3.md`.
+La grille des contrôles de consolidation figure dans `docs/VALIDATION-beta.4.md`.

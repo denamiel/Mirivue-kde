@@ -1,7 +1,6 @@
 from .i18n import tr, trf
 tr('Clipboard, duplicate and drop actions; all writes use the checked transfer worker.')
 import os
-import tempfile
 from pathlib import Path
 from PySide6.QtCore import Qt, QMimeData, QUrl, QPoint
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPalette, QCursor, QIcon, QAction
@@ -13,7 +12,9 @@ from .iconography import set_themed_action_icon
 from .context_menu_settings import mark_entry
 from .paste_behavior import paste_action_label, local_clipboard_kind
 
-class TransferMixin:
+from .native_clipboard import NativeClipboardMixin
+
+class TransferMixin(NativeClipboardMixin):
 
     def init_transfers(self, file_menu):
         self.transfer_actions = {}
@@ -202,48 +203,6 @@ class TransferMixin:
         # their existing confirmation.
         self.move_entries(paths, destination, confirmed=cut, copy_only=not cut, clipboard_guard=clipboard_guard)
 
-    def paste_clipboard_content(self, destination, mime):
-        """Create a named file from clipboard text or image without replacing one."""
-        image = mime.imageData() if mime.hasImage() else None
-        if isinstance(image, QPixmap):
-            image = image.toImage()
-        is_image = isinstance(image, QImage) and not image.isNull()
-        if not is_image and not mime.hasText():
-            return
-        payload = b'' if is_image else mime.text().encode('utf-8')
-        default = tr('Image collée.png') if is_image else tr('Texte collé.txt')
-        while True:
-            name, accepted = QInputDialog.getText(self, tr('Coller dans un nouveau fichier'),
-                                                   tr('Nom du fichier :'), text=default)
-            if not accepted:
-                return
-            if (reason := services.validate_portable_name(name)):
-                QMessageBox.warning(self, tr('Nom de fichier invalide'), reason)
-                continue
-            target = destination / name
-            if target.exists() or target.is_symlink():
-                QMessageBox.warning(self, tr('Nom déjà utilisé'), trf('« \x1f0\x1f » existe déjà.', name))
-                default = name
-                continue
-            break
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(prefix='.mirivue-paste-', dir=destination,
-                                             delete=False) as stream:
-                temporary = Path(stream.name)
-                if not is_image:
-                    stream.write(payload)
-            if is_image and not image.save(str(temporary), 'PNG'):
-                raise OSError(tr('Impossible d’enregistrer l’image.'))
-            # link() fails atomically if another process created this name.
-            os.link(temporary, target)
-        except OSError as error:
-            QMessageBox.warning(self, tr('Collage impossible'), str(error))
-            return
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
-        self.refresh_kio_panes()
 
     def clipboard_signature(self):
         mime = QApplication.clipboard().mimeData()

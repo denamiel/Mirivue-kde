@@ -7,14 +7,14 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 
-class TestBeta3Release(unittest.TestCase):
+class TestBeta4Release(unittest.TestCase):
     def test_version_consistent_in_application_python_and_appstream(self):
         tree = ast.parse((ROOT/'mirivue/__init__.py').read_text())
         version = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
                        and any(isinstance(t,ast.Name) and t.id=='__version__' for t in n.targets))
         python_version = tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']
-        self.assertEqual(version, '1.0.0-beta.3')
-        self.assertEqual(python_version, '1.0.0b3')
+        self.assertEqual(version, '1.0.0-beta.4')
+        self.assertEqual(python_version, '1.0.0b4')
         for path in ('packaging/org.pdenams.Mirivue.Qt.metainfo.xml','packaging/mirivue-local.xml'):
             release = ET.parse(ROOT/path).find('.//release')
             self.assertEqual(release.attrib['version'], version, path)
@@ -23,8 +23,8 @@ class TestBeta3Release(unittest.TestCase):
     def test_rpm_upgrade_keeps_version_and_increases_legacy_release_counter(self):
         spec = (ROOT/'packaging/fedora/mirivue-kde.spec').read_text()
         self.assertIn('Version: 1.0.0', spec)
-        self.assertIn('Release: 0.198.beta3.1%{?dist}', spec)
-        self.assertIn('Mirivue-1.0.0-beta.3-KDE.tar.gz', spec)
+        self.assertIn('Release: 0.199.beta4.1%{?dist}', spec)
+        self.assertIn('Mirivue-1.0.0-beta.4-KDE.tar.gz', spec)
 
     def test_media_read_failure_is_explained_without_claiming_a_crash(self):
         tree = ast.parse((ROOT/'mirivue/metadata.py').read_text())
