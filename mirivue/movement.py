@@ -154,7 +154,15 @@ class MovementMixin(BackgroundTransfers):
         try:
             if any(fingerprint(source) != signatures[source] for source in reverse):
                 raise OSError(tr('Un fichier a changé depuis le renommage.'))
-            plans = [Rename(source, target, signatures[source]) for source, target in reverse.items()]
+            # apply_renames moves media companions automatically. The history
+            # records both files, but must submit each companion only once.
+            from .media import companion, AUDIO_EXT, IMAGE_EXT
+            from .metadata import EXTENSIONS
+            implicit = {companion(source) for source, target in reverse.items()
+                        if source.suffix.lower() in EXTENSIONS | AUDIO_EXT | IMAGE_EXT
+                        and reverse.get(companion(source)) == companion(target)}
+            plans = [Rename(source, target, signatures[source]) for source, target in reverse.items()
+                     if source not in implicit]
             completed, errors = apply_renames(plans)
             if errors or len(completed) != len(reverse):
                 raise OSError(tr('\n').join(errors) or tr('Le renommage n’a pas pu être annulé.'))

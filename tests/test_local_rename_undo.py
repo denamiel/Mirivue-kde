@@ -22,6 +22,8 @@ class TestLocalRenameUndo(unittest.TestCase):
         tree = ast.parse((ROOT / 'mirivue' / 'movement.py').read_text())
         klass = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'MovementMixin')
         namespace = {
+            '__name__': 'rename_test_pkg.movement',
+            '__package__': 'rename_test_pkg',
             'BackgroundTransfers': object,
             'Rename': cls.extensions['Rename'],
             'apply_renames': cls.extensions['apply_renames'],
@@ -37,6 +39,37 @@ class TestLocalRenameUndo(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         TestBatchRenameExistingNames.tearDownClass()
+
+    def test_media_and_companions_undo_and_redo_once(self):
+        import sys
+        media = sys.modules['rename_test_pkg.media']
+        media.IMAGE_EXT.add('.png')
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                sources = [root/'a.png', root/'b.png']
+                for path in sources:
+                    path.write_bytes(path.name.encode())
+                    media.companion(path).write_bytes(b'original XMP')
+                plans = [self.extensions['Rename'](path, root/f'Lot {i}.png',
+                         self.extensions['fingerprint'](path)) for i, path in enumerate(sources)]
+                changed, errors = self.extensions['apply_renames'](plans)
+                self.assertFalse(errors)
+                self.assertEqual(len(changed), 4)
+                window = self.mixin()
+                window.refresh_kio_panes = lambda: None
+                window.record_local_renames(changed)
+                self.assertTrue(window.apply_local_rename_history(True))
+                for path in sources:
+                    self.assertEqual(path.read_bytes(), path.name.encode())
+                    self.assertEqual(media.companion(path).read_bytes(), b'original XMP')
+                self.assertTrue(window.apply_local_rename_history(False))
+                for plan in plans:
+                    self.assertFalse(plan.source.exists())
+                    self.assertEqual(plan.destination.read_bytes(), plan.source.name.encode())
+                    self.assertEqual(media.companion(plan.destination).read_bytes(), b'original XMP')
+        finally:
+            media.IMAGE_EXT.discard('.png')
 
     def test_exchange_undo_and_redo_preserve_contents(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -4,7 +4,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import json
 import faulthandler
 faulthandler.enable()
-faulthandler.dump_traceback_later(25, repeat=True)
+faulthandler.dump_traceback_later(45, repeat=True)
 import time
 import unittest
 from pathlib import Path
