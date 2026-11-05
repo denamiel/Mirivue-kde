@@ -18,6 +18,13 @@ def can_paste_contents():
     except (OSError, AttributeError):
         return False
 
+_recorded_serials = set()
+
+def history_serial():
+    library = load()
+    library.mirivue_clipboard_history_serial.restype = ctypes.c_ulonglong
+    return library.mirivue_clipboard_history_serial()
+
 class ClipboardOperation(QObject):
     completed = Signal(object)
 
@@ -57,7 +64,11 @@ class ClipboardOperation(QObject):
 
 class NativeClipboardMixin:
     def record_main_kio_history(self):
-        self.file_undo_history().append(('main-kio', None))
+        serial = history_serial()
+        if not serial or serial in _recorded_serials:
+            return
+        _recorded_serials.add(serial)
+        self.file_undo_history().append(('main-kio', serial))
         self._file_redo_history = []
         self.update_kio_undo_action(services._kio_undo_available)
         self.update_kio_redo_action(services._kio_redo_available)
@@ -100,6 +111,8 @@ class NativeClipboardMixin:
             return
         entry = source[-1]
         try:
+            if undo and history_serial() != entry[1]:
+                raise OSError(tr('L’historique natif a changé. Cette opération ne peut pas être annulée depuis cette fenêtre.'))
             operation = ClipboardOperation(self, history=1 if undo else 2)
         except (OSError, AttributeError) as error:
             QMessageBox.warning(self, tr('Opération indisponible'), str(error))

@@ -21,7 +21,7 @@ Les fichiers créés sont sélectionnés après actualisation du dossier. Les
 opérations de collage restent accessibles dans Opérations et empêchent la
 fermeture effective de l’application tant qu’elles ne sont pas terminées.
 L’historique distingue le gestionnaire KIO du processus Qt et celui du service
-pour adresser Annuler/Rétablir à celui qui a exécuté l’opération. Les dépôts
+avec contrôle de l’identifiant de commande avant annulation, pour adresser Annuler/Rétablir à celui qui a exécuté l’opération. Les dépôts
 natifs sur les emplacements et la barre de chemin sont associés au premier.
 L’annulation d’une création de fichier utilise le comportement KIO, notamment
 sa corbeille ; un remplacement confirmé ne garantit pas la restauration des

@@ -137,6 +137,13 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
         self.paste('existing.txt', conflict='overwrite')
         self.assertEqual(target.read_text(), 'new')
 
+    def test_native_drop_notification_does_not_duplicate_a_previous_command(self):
+        self.text('single history record')
+        path = self.paste('single.txt')
+        self.window.native_drop_completed()
+        self.assertEqual(len(self.window.file_undo_history()), 1)
+        self.assertTrue(path.exists())
+
     def test_png_payload_and_selection(self):
         image = QImage(4, 3, QImage.Format_ARGB32)
         image.fill(QColor('red'))

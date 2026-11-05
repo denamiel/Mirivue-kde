@@ -118,3 +118,8 @@ extern "C" int mirivue_clipboard_can_paste()
     const auto *mime = QApplication::clipboard()->mimeData();
     return mime && !mime->hasUrls() && KIO::canPasteMimeData(mime);
 }
+
+extern "C" unsigned long long mirivue_clipboard_history_serial()
+{
+    return KIO::FileUndoManager::self()->currentCommandSerialNumber();
+}
