@@ -144,23 +144,37 @@ class TestNativeFileManagement(unittest.TestCase):
         original = {p.name:p.read_bytes() for p in paths}
         self.select(paths)
         timer = QTimer(self.window)
-        acted = []
+        acted, errors = [], []
+        deadline = time.monotonic()+12
         def drive():
             dialog = self.app.activeModalWidget()
-            if not isinstance(dialog, QDialog) or acted: return
+            if not isinstance(dialog, QDialog): return
+            if time.monotonic() > deadline:
+                errors.append('Timed out: '+repr([label.text() for label in dialog.findChildren(QLabel)]))
+                dialog.reject()
+                return
             method = dialog.findChild(QComboBox, 'batch-rename-method')
-            if not method: return
-            method.setCurrentIndex(method.findData('number'))
-            dialog.findChild(QLineEdit,'batch-rename-primary').setText('Lot')
-            self.assertEqual(dialog.findChild(QTableWidget).rowCount(), 2)
-            acted.append(True)
-            dialog.accept()
+            if not method:
+                errors.append('Unexpected dialog: '+repr([label.text() for label in dialog.findChildren(QLabel)]))
+                dialog.reject()
+                return
+            if acted: return
+            try:
+                method.setCurrentIndex(method.findData('number'))
+                dialog.findChild(QLineEdit,'batch-rename-primary').setText('Lot')
+                self.assertEqual(dialog.findChild(QTableWidget).rowCount(), 2)
+                acted.append(True)
+                dialog.accept()
+            except Exception as error:
+                errors.append(repr(error))
+                dialog.reject()
         timer.timeout.connect(drive)
         timer.start(20)
         try:
             self.window.rename_f2()  # Multiple selected entries must open the bulk tool.
         finally:
             timer.stop()
+        self.assertEqual(errors, [])
         self.assertTrue(acted)
         for index, source in enumerate(paths,1):
             target = source.with_name(f'Lot {index:03d}.png')
