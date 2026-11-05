@@ -132,6 +132,8 @@ class TestNativeKioTransfers(unittest.TestCase):
         ok, error = self.request('move', source, readonly)
         self.assertFalse(ok)
         self.assertTrue(error)
+        self.assertNotEqual(error, 'Transfert annulé.', 'a timeout must not masquerade as the filesystem error')
+        self.assertNotIn('ne répond pas', error)
         self.assertEqual(source.read_bytes(), b'hidden')
         self.assertFalse((readonly / source.name).exists())
 
@@ -154,6 +156,8 @@ class TestNativeKioTransfers(unittest.TestCase):
                 ok, error = self.request('move', source, destination)
             self.assertFalse(ok)
             self.assertTrue(error)
+        self.assertNotEqual(error, 'Transfert annulé.', 'a timeout must not masquerade as the filesystem error')
+        self.assertNotIn('ne répond pas', error)
             self.assertEqual(source.read_bytes(), payload)
             # Partial-copy naming/cleanup belongs to KIO. Do not promise its
             # atomic publication or unconditional removal of every partial.

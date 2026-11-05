@@ -1,10 +1,9 @@
 from .item_presentation import map_file_index
-from .i18n import tr, trf
+from .i18n import tr
 """KIO transfer history, pane updates and background-window lifetime."""
 from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QItemSelectionModel, QUrl
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QTextBrowser, QMessageBox, QSystemTrayIcon, QWidget
-from .platform_services import services
 
 def transfer_url_text(value):
     url = QUrl(str(value))

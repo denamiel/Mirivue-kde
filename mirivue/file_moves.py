@@ -1,5 +1,5 @@
 """Shared file-name and no-overwrite publication utilities; transfers use KIO."""
-from .i18n import tr, trf
+from .i18n import tr
 from collections import Counter
 import os
 from pathlib import Path

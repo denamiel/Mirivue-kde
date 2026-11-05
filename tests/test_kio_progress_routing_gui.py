@@ -140,36 +140,39 @@ class TestKioProgressRouting(unittest.TestCase):
         self.assertEqual(w.kio_transfer_workers(), [second])
         page.close()
 
-    def close_choice(self, text):
-        def choose():
-            box = self.app.activeModalWidget()
-            if isinstance(box, QMessageBox):
-                next(button for button in box.buttons() if button.text() == text).click()
-        QTimer.singleShot(0, choose)
-        self.window.quit_requested = True
-        self.window.close()
-        self.drain()
 
-    def test_close_can_be_cancelled_without_cancelling_transfers(self):
-        first, second = self.start(), self.start('second')
-        self.close_choice('Revenir à Mirivue')
-        self.assertTrue(self.window.isVisible())
-        self.assertFalse(first.cancelled)
-        self.assertFalse(second.cancelled)
 
-    def test_stop_and_quit_waits_until_every_transfer_finishes(self):
+
+    def test_close_hides_without_cancelling_until_both_jobs_finish(self):
         w = self.window
         first, second = self.start(), self.start('second')
-        self.close_choice('Arrêter les transferts et quitter')
-        self.assertTrue(first.cancelled)
-        self.assertTrue(second.cancelled)
-        self.assertTrue(w.isVisible())
-        first.completed.emit(False, 'Transfert annulé.')
-        self.drain()
-        self.assertTrue(w.isVisible())
-        second.completed.emit(False, 'Transfert annulé.')
+        w.close()
         self.drain()
         self.assertFalse(w.isVisible())
+        self.assertFalse(w.closing)
+        self.assertFalse(first.cancelled)
+        self.assertFalse(second.cancelled)
+        first.completed.emit(True, '')
+        QTest.qWait(300)
+        self.assertFalse(w.closing)
+        self.assertEqual(w.kio_transfer_workers(), [second])
+        second.completed.emit(True, '')
+        QTest.qWait(400)
+        self.assertFalse(w._background_transfer_close_timer.isActive())
+        self.assertFalse(w.isVisible())
+
+    def test_reopen_during_transfer_prevents_automatic_close(self):
+        w = self.window
+        first, second = self.start(), self.start('second')
+        w.close()
+        w.show()
+        QTest.qWait(300)
+        first.completed.emit(True, '')
+        second.completed.emit(True, '')
+        QTest.qWait(300)
+        self.assertTrue(w.isVisible())
+        self.assertFalse(w.closing)
+        self.assertFalse(w._background_transfer_close_timer.isActive())
 
     def test_stop_folder_loading_does_not_cancel_file_operations(self):
         w = self.window

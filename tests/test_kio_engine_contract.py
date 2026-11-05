@@ -1,5 +1,4 @@
 """KIO failures are terminal, visible, and never retried through another engine."""
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 from mirivue.movement import KioTransferWorker
