@@ -109,7 +109,7 @@ class TestKioProgressRouting(unittest.TestCase):
         worker.progress.emit(65)
         self.drain()
         self.assertTrue(w.bar.isHidden())
-        self.assertTrue(w.transfer_bar.isHidden())
+        self.assertFalse(hasattr(w, 'transfer_bar'))
         self.assertTrue(w.job_button.isVisible())
         self.assertTrue(w.jobs_action.isEnabled())
         w.sidebar.hide()

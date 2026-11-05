@@ -1,3 +1,10 @@
+# 1.0.0-beta.3 — 5 novembre 2026
+
+- Suppression de l’ancien moteur Python de copie/déplacement, déjà inutilisé par les commandes de l’interface. KIO reste le moteur des transferts ordinaires.
+- Conservation des validations, fichiers associés, renommages spécialisés et actualisation des panneaux.
+- Erreur inattendue du worker KIO rendue visible et terminale ; contrôles de panne renforcés sur le service natif.
+- Documentation des garanties réellement appliquées aux transferts KIO.
+
 ## 1.0.0-beta.2 — 5 novembre 2026
 
 - Consolidation des transferts : tests de contenu avec les moteurs Python et KIO natifs, dont les déplacements entre deux systèmes de fichiers.

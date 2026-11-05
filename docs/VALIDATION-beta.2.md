@@ -1,3 +1,5 @@
+> Document historique de la bêta 2. Pour le moteur actuellement utilisé et ses garanties, consulter [la validation de la bêta 3](VALIDATION-beta.3.md).
+
 # Mirivue KDE 1.0.0-beta.2 — périmètre de validation
 
 Version de consolidation, sans nouvelle fonction de gestion des fichiers.

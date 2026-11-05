@@ -1,6 +1,6 @@
 [project]
 name = "mirivue-kde"
-version = "1.0.0b2"
+version = "1.0.0b3"
 description = "Gestionnaire de fichiers orienté médias pour KDE Plasma"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }

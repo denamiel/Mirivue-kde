@@ -5,10 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from PySide6.QtCore import Qt, QMimeData, QUrl, QThread, Signal, QTimer
 from PySide6.QtGui import QDrag
-from PySide6.QtWidgets import QMessageBox, QInputDialog, QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton
-from .file_moves import MoveWorker, normalize_sources, suggest_folder, valid_name, invalid_name_reason, exists
+from PySide6.QtWidgets import QMessageBox, QInputDialog
+from .file_moves import normalize_sources, suggest_folder, valid_name, invalid_name_reason, exists
 from .extensions import Rename, apply_renames, fingerprint
-from . import library
 from .locations import Location
 from .platform_services import services
 
@@ -61,7 +60,12 @@ class KioTransferWorker(QThread):
         self.cancelled = True
 
     def run(self):
-        ok, error = services.transfer_kio(self.sources, self.destination, self.move, self.progress.emit, lambda: self.cancelled, operation=self.operation)
+        try:
+            ok, error = services.transfer_kio(self.sources, self.destination, self.move, self.progress.emit, lambda: self.cancelled, operation=self.operation)
+        except Exception:
+            from .diagnostics import _logger
+            _logger().exception('Unexpected KIO transfer failure')
+            ok, error = False, tr('Le transfert s’est arrêté de façon inattendue. Vérifiez la source et la destination ; les détails sont dans le journal.')
         self.completed.emit(ok, error)
 
 class KioUndoWorker(QThread):
@@ -90,15 +94,6 @@ class KioDirectoryWorker(QThread):
         ok, error = services.create_directory(self.parent_url, self.name)
         self.completed.emit(ok, error, self.name)
 
-class MoveDialog(QDialog):
-
-    def __init__(self, worker, parent):
-        super().__init__(parent)
-        self.worker = worker
-
-    def reject(self):
-        self.worker.requestInterruption()
-        self.setWindowTitle(tr('Annulation après sécurisation du fichier…'))
 from .background_transfers import BackgroundTransfers
 
 class MovementMixin(BackgroundTransfers):
@@ -751,49 +746,3 @@ class MovementMixin(BackgroundTransfers):
             return
         return self.start_kio_planned_transfers(plans, copy_only, clipboard_guard)
 
-    def migrate_moved_data(self, worker):
-        if not worker.moved:
-            return
-        records = dict(self.saved_results)
-        for pane in self.panes:
-            records.update({str(r.path): library.encode_row(r) for r in pane.model.rows})
-        for old, data in records.items():
-            old_path = Path(old)
-            for source, target in worker.moved.items():
-                if old_path != source and source not in old_path.parents:
-                    continue
-                try:
-                    row = library.decode_row(data)
-                    if row.file_signature != worker.source_signatures.get(old_path):
-                        continue
-                    row.path = target / old_path.relative_to(source) if old_path != source else target
-                    row.file_signature = fingerprint(row.path)
-                    row.values[0] = row.path.name
-                    row.sort_values[0] = row.path.name.casefold()
-                    row.duplicate_group = 0
-                    self.saved_results[str(row.path)] = library.encode_row(row)
-                    self.result_cache[row.path] = row
-                    if not exists(old_path):
-                        self.saved_results.pop(old, None)
-                        self.result_cache.pop(old_path, None)
-                except (OSError, ValueError, KeyError, TypeError):
-                    pass
-                break
-        for key, value in worker.note_updates.items():
-            self.settings.setValue(key, value)
-        library.write(self.settings, tr('results'), self.saved_results)
-        self.clear_duplicates()
-        # Keep shared KDE Places bookmarks aligned when Mirivue itself moves
-        # the bookmarked directory (or a parent directory containing it).
-        for place in self.current_place_entries():
-            url = str(place.get('url') or '')
-            source_path = QUrl(url).toLocalFile() if url.startswith('file:') else ''
-            if not source_path:
-                continue
-            bookmarked = Path(source_path)
-            for source, target in worker.moved.items():
-                if not exists(source) and (bookmarked == source or source in bookmarked.parents):
-                    relocated = target / bookmarked.relative_to(source)
-                    new_url = QUrl.fromLocalFile(str(relocated)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
-                    services.change_place('relocate', url, new_url)
-                    break

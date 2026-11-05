@@ -11,29 +11,13 @@ from unittest.mock import patch
 
 from support.stability import (
     _create_archive_samples,
-    run_archive_stability_check, run_cross_volume_check, run_deletion_stability_check,
-    run_failure_recovery_check,
+    run_archive_stability_check, run_deletion_stability_check,
     run_large_folder_stability_check, run_multimedia_stability_check,
-    run_stability_check, tree_manifest,
+    tree_manifest,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def transfer(source, target, cancelled=lambda: False, progress=lambda text: None, copy_only=False):
-    source, target = Path(source), Path(target)
-    if target.exists() or target.is_symlink():
-        raise FileExistsError(errno.EEXIST, 'exists', str(target))
-    if cancelled():
-        raise InterruptedError()
-    if copy_only:
-        if source.is_dir():
-            shutil.copytree(source, target, symlinks=True)
-        else:
-            shutil.copy2(source, target, follow_symlinks=False)
-    else:
-        source.rename(target)
 
 
 class TestStabilityCheck(unittest.TestCase):
@@ -65,25 +49,6 @@ class TestStabilityCheck(unittest.TestCase):
             self.assertEqual(manifest['lien'], ('link', 'Été_日本.txt'))
             self.assertEqual(manifest['Été_日本.txt'][0], 'file')
 
-    def test_complete_check_cleans_its_unique_directory(self):
-        with tempfile.TemporaryDirectory() as folder:
-            base = Path(folder)
-            sentinel = base / 'fichier personnel simulé.txt'
-            sentinel.write_text('ne pas toucher', encoding='utf-8')
-            result = run_stability_check(base, transfer=transfer)
-            self.assertTrue(result.success, result.report)
-            self.assertIn('conflit de nom refusé', result.report)
-            self.assertIn('espace de test supprimé', result.report)
-            self.assertFalse(list(base.glob('Mirivue-validation-*')))
-            self.assertEqual(sentinel.read_text(encoding='utf-8'), 'ne pas toucher')
-
-    def test_cancelled_check_also_cleans_up(self):
-        with tempfile.TemporaryDirectory() as folder:
-            base = Path(folder)
-            result = run_stability_check(base, cancelled=lambda: True, transfer=transfer)
-            self.assertFalse(result.success)
-            self.assertIn('ANNULÉ', result.report)
-            self.assertFalse(list(base.glob('Mirivue-validation-*')))
 
     def test_release_does_not_import_development_validation_module(self):
         source = (ROOT / 'mirivue' / 'app.py').read_text(encoding='utf-8')
@@ -92,77 +57,6 @@ class TestStabilityCheck(unittest.TestCase):
         self.assertFalse((ROOT / 'mirivue' / 'stability.py').exists())
         self.assertTrue((ROOT / 'tests' / 'support' / 'stability.py').is_file())
 
-    def test_cross_volume_check_moves_both_ways_and_cleans_both_roots(self):
-        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-            first_base, second_base = Path(first), Path(second)
-            first_sentinel = first_base / 'personnel-1.txt'
-            second_sentinel = second_base / 'personnel-2.txt'
-            first_sentinel.write_text('un', encoding='utf-8')
-            second_sentinel.write_text('deux', encoding='utf-8')
-            result = run_cross_volume_check(
-                first_base, second_base, transfer=transfer, device_ids=(1, 2),
-            )
-            self.assertTrue(result.success, result.report)
-            self.assertIn('source supprimée après vérification', result.report)
-            self.assertEqual(result.report.count('source supprimée après vérification'), 2)
-            self.assertFalse(list(first_base.glob('Mirivue-validation-croisee-*')))
-            self.assertFalse(list(second_base.glob('Mirivue-validation-croisee-*')))
-            self.assertEqual(first_sentinel.read_text(encoding='utf-8'), 'un')
-            self.assertEqual(second_sentinel.read_text(encoding='utf-8'), 'deux')
-
-    def test_cross_volume_check_refuses_one_device(self):
-        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-            result = run_cross_volume_check(first, second, transfer=transfer, device_ids=(1, 1))
-            self.assertFalse(result.success)
-            self.assertIn('même système de fichiers', result.report)
-            self.assertFalse(list(Path(first).glob('Mirivue-validation-croisee-*')))
-            self.assertFalse(list(Path(second).glob('Mirivue-validation-croisee-*')))
-
-    def test_cancelled_cross_volume_check_cleans_both_roots(self):
-        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-            result = run_cross_volume_check(
-                first, second, cancelled=lambda: True, transfer=transfer, device_ids=(1, 2),
-            )
-            self.assertFalse(result.success)
-            self.assertIn('ANNULÉ', result.report)
-            self.assertFalse(list(Path(first).glob('Mirivue-validation-croisee-*')))
-            self.assertFalse(list(Path(second).glob('Mirivue-validation-croisee-*')))
-
-    def test_failure_recovery_check_preserves_sources_and_cleans_staging(self):
-        with tempfile.TemporaryDirectory() as folder:
-            base = Path(folder)
-            sentinel = base / 'fichier personnel simulé.txt'
-            sentinel.write_text('ne pas toucher', encoding='utf-8')
-            calls = []
-
-            def faulting_transfer(source, target, cancelled=lambda: False,
-                                  progress=lambda text: None, copy_only=False,
-                                  bytes_progress=lambda done, total: None):
-                staging = Path(tempfile.mkdtemp(prefix='.mirivue-deplacement-', dir=Path(target).parent))
-                try:
-                    partial = staging / Path(source).name
-                    partial.write_bytes(Path(source).read_bytes()[:1024])
-                    calls.append(Path(source).name)
-                    bytes_progress(1024, Path(source).stat().st_size * 2)
-                finally:
-                    shutil.rmtree(staging, ignore_errors=True)
-
-            result = run_failure_recovery_check(base, transfer=faulting_transfer)
-            self.assertTrue(result.success, result.report)
-            self.assertEqual(len(calls), 3)
-            self.assertIn('espace insuffisant simulé', result.report)
-            self.assertIn('destination protégée simulée', result.report)
-            self.assertIn('retrait de périphérique simulé', result.report)
-            self.assertFalse(list(base.glob('Mirivue-validation-incidents-*')))
-            self.assertEqual(sentinel.read_text(encoding='utf-8'), 'ne pas toucher')
-
-    def test_cancelled_failure_recovery_check_cleans_root(self):
-        with tempfile.TemporaryDirectory() as folder:
-            base = Path(folder)
-            result = run_failure_recovery_check(base, cancelled=lambda: True, transfer=lambda *args, **kwargs: None)
-            self.assertFalse(result.success)
-            self.assertIn('ANNULÉ', result.report)
-            self.assertFalse(list(base.glob('Mirivue-validation-incidents-*')))
 
     def test_archive_check_validates_four_formats_and_corruption(self):
         with tempfile.TemporaryDirectory() as folder:

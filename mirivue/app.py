@@ -1821,13 +1821,9 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         if not hasattr(self, 'bar'):
             return
         foreground = self.bar.isVisible()
-        transfer = any(not job.get('native') for job in self.pending_transfers()) if hasattr(self, 'transfer_history') else False
         task = self.jobs_busy() if hasattr(self, 'job_queue') else False
-        if hasattr(self, 'transfer_label'):
-            self.transfer_label.setVisible(transfer and not foreground)
-            self.transfer_bar.setVisible(transfer and not foreground)
         if hasattr(self, 'job_label'):
-            show_task = task and not foreground and not transfer
+            show_task = task and not foreground
             self.job_label.setVisible(show_task)
             self.job_progress.setVisible(show_task)
         self.update_activity_entry_points()
@@ -1845,7 +1841,6 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         )
         native_jobs = [job for job in self.pending_transfers() if job.get('native')]
         tooltip = (trf('\x1f0\x1f opération(s) de fichiers en cours — détails et arrêt dans Opérations ou Plasma.', len(native_jobs)) if native_jobs
-                   else self.transfer_label.text() if transfer_running and hasattr(self, 'transfer_label')
                    else self.job_label.text() if analysis_running and hasattr(self, 'job_label')
                    else tr('Opérations en cours'))
         self.job_button.setToolTip(tooltip)

@@ -7,6 +7,7 @@ destination="${1:?Usage: install_docs.sh DESTINATION}"
 documents=(
   'README.md'
   'docs/VALIDATION-beta.2.md'
+  'docs/VALIDATION-beta.3.md'
   'LISEZ-MOI-KDE.txt'
   'CHANGELOG.md'
   'packaging/README.md'

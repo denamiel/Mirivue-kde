@@ -102,15 +102,61 @@ class TestNativeKioTransfers(unittest.TestCase):
             self.assertEqual(manifest(self.target / 'source'), self.expected)
 
 
-class TestPythonTransfers(TestNativeKioTransfers):
-    """Same file invariants exercised through the real checked Python engine."""
-    def request(self, command, source, destination, cancelled=None):
-        from mirivue.file_moves import move_one
-        try:
-            warning = move_one(source, destination / source.name,
-                               copy_only=command == 'copy', cancelled=cancelled or (lambda:False))
-            return not bool(warning), warning
-        except (OSError, InterruptedError) as error:
-            return False, str(error)
+
+    def test_cancel_move_after_request_submission_preserves_both_files(self):
+        # The first three checks are before submission. The fourth is in the
+        # response loop, after the real native job has been requested.
+        source = self.source / '.hidden'
+        existing = self.target / source.name
+        existing.write_bytes(b'keep destination')
+        calls = 0
+        def cancelled():
+            nonlocal calls
+            calls += 1
+            return calls >= 4
+        ok, error = self.request('move', source, self.target, cancelled)
+        self.assertFalse(ok)
+        self.assertEqual(error, 'Transfert annulé.')
+        self.assertGreaterEqual(calls, 4)
+        self.assertEqual(source.read_bytes(), b'hidden')
+        self.assertEqual(existing.read_bytes(), b'keep destination')
+
+    def test_read_only_destination_preserves_source(self):
+        readonly = Path('/sys')
+        self.assertTrue(os.statvfs(readonly).f_flag & os.ST_RDONLY,
+                        'CI requires a read-only /sys mount')
+        source = self.source / '.hidden'
+        # A unique absent name avoids any existing system entry. /sys is
+        # read-only even for root inside the Fedora CI container.
+        source = source.rename(self.source / ('mirivue-test-' + self.root.name))
+        ok, error = self.request('move', source, readonly)
+        self.assertFalse(ok)
+        self.assertTrue(error)
+        self.assertEqual(source.read_bytes(), b'hidden')
+        self.assertFalse((readonly / source.name).exists())
+
+    def test_full_destination_preserves_cross_filesystem_move_source(self):
+        # Docker's /dev/shm is a private, bounded tmpfs (not the host's disk).
+        # Actually exhaust it instead of injecting an error in another engine.
+        shared = Path('/dev/shm')
+        total = os.statvfs(shared).f_blocks * os.statvfs(shared).f_frsize
+        self.assertLessEqual(total, 128 * 1024 * 1024,
+                             'Only run this test in a small private CI tmpfs')
+        self.assertNotEqual(shared.stat().st_dev, self.root.stat().st_dev)
+        source = self.source / 'large.bin'
+        payload = bytes(range(256)) * 8192
+        source.write_bytes(payload)
+        with tempfile.TemporaryDirectory(prefix='mirivue-full-', dir=shared) as folder:
+            destination = Path(folder)
+            with (destination / 'filler').open('wb') as filler:
+                free = os.statvfs(shared).f_bavail * os.statvfs(shared).f_frsize
+                os.posix_fallocate(filler.fileno(), 0, free - 65536)
+                ok, error = self.request('move', source, destination)
+            self.assertFalse(ok)
+            self.assertTrue(error)
+            self.assertEqual(source.read_bytes(), payload)
+            # Partial-copy naming/cleanup belongs to KIO. Do not promise its
+            # atomic publication or unconditional removal of every partial.
+
 
 if __name__ == '__main__': unittest.main()

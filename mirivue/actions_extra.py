@@ -10,7 +10,6 @@ from PySide6.QtWidgets import QPushButton, QMenu, QMessageBox, QFileDialog, QDia
 from . import library
 from .platform_services import services
 from .metadata import duration
-from .movement import MoveDialog
 from .remux import RemuxWorker
 
 def component_path(name):

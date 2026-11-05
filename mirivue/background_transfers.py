@@ -1,11 +1,9 @@
 from .item_presentation import map_file_index
 from .i18n import tr, trf
-tr('Serialized, non-modal transfers. All widget updates stay on the GUI thread.')
+"""KIO transfer history, pane updates and background-window lifetime."""
 from pathlib import Path
-import json
-from PySide6.QtCore import Qt, QTimer, QItemSelectionModel, QProcess, QUrl
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QDialog, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QTextBrowser, QMessageBox, QSystemTrayIcon, QWidget
-from .file_moves import MoveWorker, exists
+from PySide6.QtCore import Qt, QTimer, QItemSelectionModel, QUrl
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QTextBrowser, QMessageBox, QSystemTrayIcon, QWidget
 from .platform_services import services
 
 def transfer_url_text(value):
@@ -68,7 +66,7 @@ class BackgroundTransfers:
 
     def clear_transfer_history(self):
         terminal = {tr('Interrompu'), tr('À vérifier'), tr('Terminé'), 'Interrompu', 'À vérifier', 'Terminé', 'Interrupted', 'Needs Attention', 'Completed'}
-        finished = [job for job in self.transfer_history if job.get(tr('state')) in terminal and job is not self.active_transfer]
+        finished = [job for job in self.transfer_history if job.get(tr('state')) in terminal]
         if not finished:
             return 0
         self.transfer_history[:] = [job for job in self.transfer_history if not any((job is done for done in finished))]
@@ -94,120 +92,6 @@ class BackgroundTransfers:
                     return True
         return False
 
-    def create_transfer_footer(self, layout):
-        self.transfer_history = []
-        self.active_transfer = None
-        self.transfer_quitting = False
-        row = QVBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(2)
-        self.transfer_label = QLabel()
-        self.transfer_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.transfer_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self.transfer_bar = QProgressBar()
-        self.transfer_bar.setMinimumWidth(0)
-        self.transfer_bar.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        self.transfer_bar.setMaximumWidth(380)
-        row.addWidget(self.transfer_label)
-        row.addWidget(self.transfer_bar)
-        for widget in (self.transfer_label, self.transfer_bar):
-            widget.hide()
-        layout.addLayout(row)
-
-    def queue_transfer(self, plans, copy_only, clipboard_guard=None):
-        used = {p.resolve() for pair in plans for p in pair}
-        from .media import companion
-        for source, target in plans:
-            if source.is_file() and companion(source).exists():
-                used.update((companion(source).resolve(), companion(target).resolve()))
-        job = {tr('plans'): plans, tr('copy'): copy_only, tr('clipboard_guard'): clipboard_guard, tr('state'): tr('En attente'), tr('message'): tr('En attente'), tr('done'): 0, tr('total'): 0, tr('errors'): [], tr('locks'): (used, {parent for p in used for parent in p.parents}), tr('count'): 0}
-        self.transfer_history.append(job)
-        self.update_transfer_footer()
-        QTimer.singleShot(0, self.start_next_transfer)
-        return job
-
-    def start_next_transfer(self):
-        if self.active_transfer or self.closing:
-            return
-        job = next((j for j in self.transfer_history if j[tr('state')] == tr('En attente')), None)
-        if job is None:
-            return
-        if self.move_worker is not None:
-            QTimer.singleShot(100, self.start_next_transfer)
-            return
-        job[tr('state')] = tr('En cours')
-        self.active_transfer = job
-        worker = MoveWorker(job[tr('plans')], copy_only=job[tr('copy')])
-        job[tr('worker')] = worker
-        self.start_plasma_transfer_progress(job)
-
-        def progress(done, total, message):
-            job.update(done=done, total=total, message=message, count=len(worker.moved))
-            self.update_transfer_footer()
-            self.send_plasma_transfer_progress(job, {
-                'event': 'progress', 'value': int(done * 100 / total) if total else 0,
-                'total': total, 'completed': len(worker.moved), 'message': message,
-            })
-        worker.progress.connect(progress)
-        worker.finished.connect(lambda: self.finish_transfer(job))
-        self.start_runtime_worker(worker, tr('Copie de fichiers') if job[tr('copy')] else tr('Déplacement de fichiers'))
-        self.update_transfer_footer()
-
-    def finish_transfer(self, job):
-        worker = job.pop(tr('worker'))
-        job[tr('errors')] = list(worker.errors)
-        job[tr('count')] = len(worker.moved)
-        job[tr('state')] = tr('Interrompu') if worker.cancelled else tr('À vérifier') if worker.errors else tr('Terminé')
-        job[tr('message')] = trf('\x1f0\x1f élément(s) ', job['count']) + (tr('copié(s).') if job[tr('copy')] else tr('déplacé(s).'))
-        self.send_plasma_transfer_progress(job, {
-            'event': 'finish', 'ok': not worker.cancelled and not worker.errors,
-            'cancelled': worker.cancelled,
-            'error': tr('Transfert annulé.') if worker.cancelled else '\n'.join(worker.errors),
-        })
-        if worker.cancelled:
-            job[tr('message')] += tr(' Les éléments terminés restent à destination ; les autres restent à la source.')
-        clipboard_guard = job.get(tr('clipboard_guard'))
-        if clipboard_guard and not worker.cancelled and len(worker.moved) == len(job[tr('plans')]) and all(not exists(source) for source, _target in job[tr('plans')]):
-            self.clear_cut_clipboard(clipboard_guard)
-        try:
-            self.migrate_moved_data(worker)
-        except Exception as error:
-            job[tr('errors')].append(tr('Transfert terminé, mais certaines données Mirivue n’ont pas été actualisées : ') + str(error))
-            job[tr('state')] = tr('À vérifier')
-        self.active_transfer = None
-        worker.deleteLater()
-        if job.get(tr('cleanup')):
-            try:
-                job[tr('cleanup')].rmdir()
-            except OSError:
-                pass
-        if not self.transfer_quitting:
-            self.reload_places()
-            if self.recursive.isChecked():
-                self.refresh_recursive_transfer_panes([p for pair in job[tr('plans')] for p in pair])
-            else:
-                self.update_transfer_panes(worker, job[tr('copy')])
-        self.update_transfer_footer()
-        self.show_activity_message(job[tr('message')] + (tr(' Consultez les erreurs dans Transferts…') if job[tr('errors')] else ''), 15000)
-        if self.transfer_quitting:
-            QTimer.singleShot(0, self.close)
-        else:
-            QTimer.singleShot(0, self.start_next_transfer)
-
-    def refresh_recursive_transfer_panes(self, paths):
-        tr('Rescan only recursive panes related to a completed transfer.')
-        changed = [Path(path).resolve() for path in paths]
-        self.capture_pane()
-        original = self.bound_pane
-        for pane in self.panes:
-            if not pane.folder:
-                continue
-            folder = Path(pane.folder).resolve()
-            related = any((folder == path or folder in path.parents or path in folder.parents for path in changed))
-            if related:
-                self.queue_pane_rescan(pane)
-        self.bind_pane(original)
-        self.sync_pane_controls()
 
     def update_transfer_panes(self, worker, copy_only):
         tr('Patch visible directory models after a transfer, preserving metadata and selection.')
@@ -287,105 +171,25 @@ class BackgroundTransfers:
         self.sync_pane_controls()
         self.update_pane_emphasis()
 
+
+    def create_transfer_footer(self, layout):
+        # KIO/Plasma owns progress; the window keeps history and stop controls.
+        self.transfer_history = []
+        self.transfer_quitting = False
+
     def update_transfer_footer(self):
-        pending = [job for job in self.pending_transfers() if not job.get('native')]
-        job = self.active_transfer or (pending[0] if pending else None)
-        if job:
-            self.transfer_label.setText((tr('Copie') if job[tr('copy')] else tr('Déplacement')) + trf(' — \x1f0\x1f — \x1f1\x1f en attente', job['message'], len(pending) - 1))
-            if job[tr('total')] > 0:
-                self.transfer_bar.setRange(0, job[tr('total')])
-                self.transfer_bar.setValue(job[tr('done')])
-                self.transfer_bar.setFormat(tr('%p %'))
-            else:
-                self.transfer_bar.setRange(0, 0)
-                self.transfer_bar.setFormat(tr('Inventaire…'))
-            self.transfer_label.setToolTip(job[tr('message')])
+        # KIO owns detailed progress; Mirivue retains history and stop controls.
         if hasattr(self, 'update_operations_button_visibility'):
             self.update_operations_button_visibility()
         self.sync_activity_progress_visibility()
 
     def cancel_transfer(self, job):
-        if job.get('native'):
-            worker = job.get('worker')
-            if worker is not None and job['state'] in (tr('En attente'), tr('En cours')):
-                job['state'] = tr('Arrêt en cours')
-                job['message'] = tr('Annulation demandée pour cette opération.')
-                worker.cancel()
-                self.update_transfer_footer()
-            return
-        if job[tr('state')] == tr('En attente'):
-            job[tr('state')] = tr('Interrompu')
-            job[tr('message')] = tr('Annulé avant le démarrage.')
-            if job.get(tr('cleanup')):
-                try:
-                    job[tr('cleanup')].rmdir()
-                except OSError:
-                    pass
-        elif job is self.active_transfer:
-            job[tr('state')] = tr('Arrêt en cours')
-            job[tr('worker')].requestInterruption()
-            job[tr('message')] = tr('Arrêt après sécurisation du fichier…')
-        self.update_transfer_footer()
-
-    def send_plasma_transfer_progress(self, job, data):
-        """Send only presentation data to the KDE job; the worker owns files."""
-        process = job.get('plasma_progress_process')
-        if process is None:
-            return
-        encoded = (json.dumps(data, ensure_ascii=False) + '\n').encode('utf-8')
-        if process.state() == QProcess.ProcessState.Running:
-            process.write(encoded)
-        elif process.state() == QProcess.ProcessState.Starting:
-            job['plasma_pending_events'].append(encoded)
-
-    def start_plasma_transfer_progress(self, job):
-        # KUiServerV2JobTracker presents the standard Plasma notification.
-        # The local checked worker continues if Plasma is not available.
-        tool = services.tool_path('mirivue-job-progress') if services.is_plasma else None
-        if not tool:
-            return
-        process = QProcess(self)
-        process.setProgram(tool)
-        process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
-        job['plasma_progress_process'] = process
-        job['plasma_progress_buffer'] = bytearray()
-        job['plasma_pending_events'] = []
-
-        def requests():
-            buffer = job['plasma_progress_buffer']
-            buffer.extend(bytes(process.readAllStandardOutput()))
-            while b'\n' in buffer:
-                line, _, remaining = buffer.partition(b'\n')
-                buffer[:] = remaining
-                try:
-                    action = json.loads(line).get('action')
-                except (ValueError, UnicodeDecodeError):
-                    continue
-                if job is not self.active_transfer:
-                    continue
-                if action == 'cancel':
-                    self.cancel_transfer(job)
-                elif action == 'pause' and job.get(tr('state')) == tr('En cours'):
-                    job[tr('worker')].pause()
-                elif action == 'resume' and job.get(tr('state')) == tr('En cours'):
-                    job[tr('worker')].resume()
-
-        process.readyReadStandardOutput.connect(requests)
-        process.finished.connect(lambda *_: job.pop('plasma_progress_process', None))
-        process.finished.connect(process.deleteLater)
-        destination = job[tr('plans')][0][1].parent
-
-        def started():
-            self.send_plasma_transfer_progress(job, {
-                'event': 'start', 'title': tr('Copie') if job[tr('copy')] else tr('Déplacement'),
-                'destination': str(destination), 'destinationUrl': destination.as_uri(),
-                'count': len(job[tr('plans')]),
-            })
-            for event in job.pop('plasma_pending_events', []):
-                process.write(event)
-
-        process.started.connect(started)
-        process.start()
+        worker = job.get('worker')
+        if worker is not None and job['state'] in (tr('En attente'), tr('En cours')):
+            job['state'] = tr('Arrêt en cours')
+            job['message'] = tr('Annulation demandée pour cette opération.')
+            worker.cancel()
+            self.update_transfer_footer()
 
     def show_transfers(self):
         self.show_jobs(tab='transfers')
@@ -424,24 +228,17 @@ class BackgroundTransfers:
                     item.setData(0, Qt.ItemDataRole.UserRole, i)
                     items[i] = item
                 item = items[i]
-                if job.get('native'):
-                    target = transfer_url_text(job['destination'])
-                    item.setText(0, job['label'] + (tr(' → ') + target if target else ''))
-                else:
-                    item.setText(0, (tr('Copie') if job[tr('copy')] else tr('Déplacement')) + tr(' → ') + str(job[tr('plans')][0][1].parent))
+                target = transfer_url_text(job['destination'])
+                item.setText(0, job['label'] + (tr(' → ') + target if target else ''))
                 item.setText(1, job[tr('state')])
-                total = len(job['sources']) if job.get('native') else len(job['plans'])
-                item.setText(2, str(total) if job.get('native') else trf('\x1f0\x1f/\x1f1\x1f', job['count'], total))
+                item.setText(2, str(len(job['sources'])))
             job = selection()
             cancel.setEnabled(bool(job and job[tr('state')] in (tr('En attente'), tr('En cours'))))
             stop.setEnabled(bool(self.pending_transfers()))
             terminal = {tr('Interrompu'), tr('À vérifier'), tr('Terminé'), 'Interrompu', 'À vérifier', 'Terminé', 'Interrupted', 'Needs Attention', 'Completed'}
-            clear_history.setEnabled(any((j[tr('state')] in terminal and j is not self.active_transfer for j in self.transfer_history)))
+            clear_history.setEnabled(any((j[tr('state')] in terminal for j in self.transfer_history)))
             if job:
-                if job.get('native'):
-                    entries = [transfer_url_text(source) for source in job['sources'][:200]]
-                else:
-                    entries = [trf('\x1f0\x1f → \x1f1\x1f', a, b) for a, b in job[tr('plans')][:200]]
+                entries = [transfer_url_text(source) for source in job['sources'][:200]]
                 details.setPlainText(job['message'] + tr('\n') + tr('\n').join(entries) + tr('\n') + tr('\n').join(job['errors']))
         cancel.clicked.connect(lambda: self.cancel_transfer(selection()) if selection() else None)
 

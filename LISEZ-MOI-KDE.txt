@@ -1,4 +1,4 @@
-MIRIVUE KDE 1.0.0-beta.2 — PRÉVERSION
+MIRIVUE KDE 1.0.0-beta.3 — PRÉVERSION
 
 Ce fichier est le point d'entrée actuel. README.md décrit l'installation,
 packaging/README.md le conditionnement et packaging/fedora/PUBLICATION.md

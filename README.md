@@ -1,9 +1,9 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version de développement : **1.0.0-beta.2** (préversion).
+Version de développement : **1.0.0-beta.3** (préversion).
 
-La portée des contrôles et leurs limites sont décrites dans [la validation de la bêta 2](docs/VALIDATION-beta.2.md).
+La portée des contrôles et leurs limites sont décrites dans [la validation de la bêta 3](docs/VALIDATION-beta.3.md).
 
 ## Installer sur Fedora 44 / 45 x86_64
 
@@ -43,6 +43,11 @@ Aucune connexion GitHub ni clé privée n'est nécessaire sur l'ordinateur clien
 L'installation depuis un artefact Actions avec `pacman -U` reste possible,
 mais ne configure pas à elle seule les mises à jour.
 Voir [le guide de conditionnement](packaging/README.md).
+
+Les copies et déplacements ordinaires utilisent **KIO**, y compris les opérations locales.
+Il n’existe pas de reprise automatique par un second moteur en cas d’échec.
+Les contrôles SHA-256 des tests vérifient leurs résultats ; ils ne sont pas
+une vérification intégrale ajoutée à chaque transfert utilisateur.
 
 ## Fonctions
 
