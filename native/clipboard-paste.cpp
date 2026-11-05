@@ -11,6 +11,7 @@
 #include <QTimer>
 #include <QWidget>
 #include <KIO/PasteJob>
+#include <KIO/Paste>
 #include <KIO/FileUndoManager>
 #include <KIO/Global>
 #include <KIO/Job>
@@ -109,4 +110,10 @@ extern "C" void mirivue_clipboard_cancel(void *pointer)
 extern "C" void mirivue_clipboard_release(void *pointer)
 {
     static_cast<ClipboardOperation *>(pointer)->deleteLater();
+}
+
+extern "C" int mirivue_clipboard_can_paste()
+{
+    const auto *mime = QApplication::clipboard()->mimeData();
+    return mime && !mime->hasUrls() && KIO::canPasteMimeData(mime);
 }

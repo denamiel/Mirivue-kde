@@ -10,6 +10,14 @@ from .native_desktop_dialogs import load
 from .i18n import tr
 from .platform_services import services
 
+def can_paste_contents():
+    try:
+        library = load()
+        library.mirivue_clipboard_can_paste.restype = ctypes.c_int
+        return bool(library.mirivue_clipboard_can_paste())
+    except (OSError, AttributeError):
+        return False
+
 class ClipboardOperation(QObject):
     completed = Signal(object)
 
@@ -103,8 +111,10 @@ class NativeClipboardMixin:
         def complete(result):
             self._native_history_operation = None
             self.finish_kio_transfer(job, result['ok'], result['error'], result['cancelled'])
-            if result['ok'] and source and source[-1] is entry:
-                (self.file_redo_history() if undo else self.file_undo_history()).append(source.pop())
+            if source and source[-1] is entry:
+                source.pop()  # KIO consumes the command even if its undo fails.
+                if result['ok']:
+                    (self.file_redo_history() if undo else self.file_undo_history()).append(entry)
             self.refresh_kio_panes()
             self.update_kio_undo_action(services._kio_undo_available)
             self.update_kio_redo_action(services._kio_redo_available)

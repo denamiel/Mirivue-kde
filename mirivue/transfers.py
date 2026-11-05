@@ -12,7 +12,7 @@ from .iconography import set_themed_action_icon
 from .context_menu_settings import mark_entry
 from .paste_behavior import paste_action_label, local_clipboard_kind
 
-from .native_clipboard import NativeClipboardMixin
+from .native_clipboard import NativeClipboardMixin, can_paste_contents
 
 class TransferMixin(NativeClipboardMixin):
 
@@ -124,7 +124,8 @@ class TransferMixin(NativeClipboardMixin):
         """Return clipboard URLs, a Dolphin-style label and transfer kind."""
         mime = QApplication.clipboard().mimeData()
         if not mime or not mime.hasUrls():
-            return ([], tr('Coller'), False)
+            label = tr('Coller le contenu du presse-papiers…') if mime and can_paste_contents() else tr('Coller')
+            return ([], label, False)
         urls = [url for url in mime.urls() if url.isValid() and (url.isLocalFile() or url.scheme())]
         if not urls:
             return ([], tr('Coller'), False)
@@ -147,7 +148,7 @@ class TransferMixin(NativeClipboardMixin):
             if not folder or not folder.is_dir() or not os.access(folder, os.W_OK | os.X_OK):
                 return False
         if not urls:
-            return bool(mime and (mime.hasImage() or mime.hasText()) and not location.is_uri)
+            return bool(mime and not location.is_uri and can_paste_contents())
         needs_kio = location.is_uri or any((not url.isLocalFile() for url in urls))
         return not needs_kio or bool(services.tool_path(tr('mirivue-kio-service')))
 

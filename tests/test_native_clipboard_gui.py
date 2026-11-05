@@ -70,7 +70,9 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
     def paste(self, name='pasted.txt', **kwargs):
         timer = self.dialogs(name, **kwargs)
         destination = self.folders[0]
-        self.window.paste_clipboard_content(destination, self.app.clipboard().mimeData())
+        self.assertTrue(self.window.paste_available(destination))
+        self.window.active_view().setFocus()
+        self.window.paste_selection(destination)
         self.wait_for(lambda: self.window._native_clipboard_operation is None)
         timer.stop()
         return destination/name if name else destination
