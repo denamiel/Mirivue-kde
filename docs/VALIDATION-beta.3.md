@@ -47,7 +47,9 @@ plutôt qu’une opération restant indéfiniment affichée en cours.
 | Distribution | construction, installation, lancement, documents installés | Fedora 44/45 et contrôle Rawhide ; construction Arch séparée |
 
 Les résultats effectivement réussis sont ceux du workflow correspondant dans
-GitHub Actions. La présence d’un scénario ici ne constitue pas son résultat.
+GitHub Actions. Le test de remplissage du tmpfs exige explicitement
+`MIRIVUE_TEST_PRIVATE_TMPFS=1`, activé par le workflow dans son conteneur privé ;
+il est ignoré par défaut lors d’un lancement manuel des tests. La présence d’un scénario ici ne constitue pas son résultat.
 
 ## Garanties et limites
 

@@ -53,6 +53,7 @@ jobs:
       - name: Régressions graphiques transferts, fermeture et sessions
         env:
           QT_QPA_PLATFORM: offscreen
+          MIRIVUE_TEST_PRIVATE_TMPFS: "1"
         run: |
           mkdir -p tools
           cp -a /usr/lib64/mirivue-kde/tools/. tools/

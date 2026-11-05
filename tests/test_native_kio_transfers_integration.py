@@ -137,6 +137,8 @@ class TestNativeKioTransfers(unittest.TestCase):
         self.assertEqual(source.read_bytes(), b'hidden')
         self.assertFalse((readonly / source.name).exists())
 
+    @unittest.skipUnless(os.environ.get('MIRIVUE_TEST_PRIVATE_TMPFS') == '1',
+                         'Requires an explicitly opted-in private CI tmpfs')
     def test_full_destination_preserves_cross_filesystem_move_source(self):
         # Docker's /dev/shm is a private, bounded tmpfs (not the host's disk).
         # Actually exhaust it instead of injecting an error in another engine.
