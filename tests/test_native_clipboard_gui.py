@@ -13,7 +13,17 @@ from mirivue.platform_services import services
 
 class TestNativeClipboardGui(parity.unittest.TestCase):
     setUpClass = classmethod(parity.TestDolphinParity.setUpClass.__func__)
-    setUp = parity.TestDolphinParity.setUp
+    def setUp(self):
+        # Native Put undo uses Trash. Docker's /tmp is on overlayfs, which
+        # KIO intentionally refuses as a foreign pseudo-filesystem. Put the
+        # disposable fixtures on the real HOME volume, as with user documents.
+        original = parity.tempfile.TemporaryDirectory
+        def home_temporary(*args, **kwargs):
+            kwargs.setdefault('dir', str(Path.home()))
+            return original(*args, **kwargs)
+        with patch.object(parity.tempfile, 'TemporaryDirectory', home_temporary):
+            parity.TestDolphinParity.setUp(self)
+        self.assertEqual(self.root.stat().st_dev, Path.home().stat().st_dev)
     tearDown = parity.TestDolphinParity.tearDown
     new_window = parity.TestDolphinParity.new_window
     settle = parity.TestDolphinParity.settle
