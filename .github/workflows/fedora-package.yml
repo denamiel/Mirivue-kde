@@ -60,7 +60,7 @@ jobs:
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui native_file_management_gui; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
       - name: Signaler une incompatibilité de développement
