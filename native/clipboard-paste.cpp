@@ -22,7 +22,7 @@ public:
     explicit ClipboardOperation() : QObject(qApp) {}
     QPointer<KJob> job;
     QJsonArray items;
-    bool done = false, ok = false, cancelled = false;
+    bool done = false, ok = false, cancelled = false, historyRecorded = false;
     QString error;
 };
 
@@ -58,8 +58,19 @@ extern "C" void *mirivue_clipboard_start(void *window, const char *destination, 
             return nullptr;
         }
         historyOperation = operation;
+        // undoJobFinished is also emitted after errors/cancellation. A real
+        // success pushes a command onto the opposite stack; do not fabricate
+        // a redo entry when the native progress notification was cancelled.
+        if (history == 1) {
+            QObject::connect(manager, &KIO::FileUndoManager::redoTextChanged, operation,
+                             [operation] { operation->historyRecorded = true; });
+        } else {
+            QObject::connect(manager, &KIO::FileUndoManager::undoTextChanged, operation,
+                             [operation] { operation->historyRecorded = true; });
+        }
         QObject::connect(manager, &KIO::FileUndoManager::undoJobFinished, operation, [operation] {
-            operation->ok = operation->error.isEmpty() && !operation->cancelled;
+            if (!operation->historyRecorded && operation->error.isEmpty()) operation->cancelled = true;
+            operation->ok = operation->historyRecorded && operation->error.isEmpty() && !operation->cancelled;
             operation->done = true;
             historyOperation = nullptr;
         }, Qt::SingleShotConnection);
