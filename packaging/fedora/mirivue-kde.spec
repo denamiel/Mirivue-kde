@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.199.beta4.1%{?dist}
+Release: 0.199.beta4.2%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
 Source0: Mirivue-1.0.0-beta.4-KDE.tar.gz
@@ -117,6 +117,9 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
+* Thu Nov 05 2026 Mirivue contributors - 1.0.0-0.199.beta4.2
+- Keep cancelled native undo operations out of the redo history.
+
 * Thu Nov 05 2026 Mirivue contributors - 1.0.0-0.199.beta4.1
 - Use public KIO paste API in the GUI process; preserve native history and test dialogs.
 

@@ -1,7 +1,7 @@
 # Mirivue KDE 1.0.0-beta.4 — collage natif KDE
 
 Version visible `1.0.0-beta.4`, version Python `1.0.0b4`, première révision RPM
-`0.199.beta4.1`. Les transferts de fichiers restent ceux de la bêta 3.
+`0.199.beta4.1`, révision courante `0.199.beta4.2`. Les transferts de fichiers restent ceux de la bêta 3.
 
 Le collage de texte et d’images utilise maintenant l’API publique `KIO::paste`,
 comme Dolphin. Le dialogue de nommage, les formats proposés, la gestion des

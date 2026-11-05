@@ -23,7 +23,7 @@ class TestBeta4Release(unittest.TestCase):
     def test_rpm_upgrade_keeps_version_and_increases_legacy_release_counter(self):
         spec = (ROOT/'packaging/fedora/mirivue-kde.spec').read_text()
         self.assertIn('Version: 1.0.0', spec)
-        self.assertIn('Release: 0.199.beta4.1%{?dist}', spec)
+        self.assertIn('Release: 0.199.beta4.2%{?dist}', spec)
         self.assertIn('Mirivue-1.0.0-beta.4-KDE.tar.gz', spec)
 
     def test_media_read_failure_is_explained_without_claiming_a_crash(self):

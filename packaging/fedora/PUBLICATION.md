@@ -3,7 +3,7 @@
 ## Références de version
 
 Version visible : **1.0.0-beta.4**. Dans la recette actuelle de `main` :
-`Version: 1.0.0` et `Release: 0.199.beta4.1%{?dist}`.
+`Version: 1.0.0` et `Release: 0.199.beta4.2%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
 Historiquement, la révision 3 a ajouté les guides corrigés sous `/usr/share/doc/mirivue-kde/`
 et permet leur distribution par une mise à jour DNF.
