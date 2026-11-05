@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QMimeData, QTimer, QUrl
 from PySide6.QtGui import QImage, QColor
-from PySide6.QtWidgets import QDialog, QLineEdit, QAbstractButton, QComboBox
+from PySide6.QtWidgets import QDialog, QLineEdit, QAbstractButton, QComboBox, QLabel
 from PySide6.QtTest import QTest
 import test_dolphin_parity_gui as parity
 from mirivue.platform_services import services
@@ -25,7 +25,8 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
         def unblock_timeout():
             modal = self.app.activeModalWidget()
             if time.monotonic() >= end and isinstance(modal, QDialog):
-                timed_out.append((modal.metaObject().className(), modal.windowTitle()))
+                timed_out.append((modal.metaObject().className(), modal.windowTitle(),
+                                  [label.text() for label in modal.findChildren(QLabel)]))
                 modal.reject()
         watchdog.timeout.connect(unblock_timeout)
         watchdog.start(50)
@@ -178,3 +179,9 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
         self.window.undo_remote_transfer()
         self.wait_for(lambda: self.window._native_history_operation is None)
         self.assertFalse(pasted.exists())
+        self.window.redo_kio_operation()
+        self.wait_for(lambda: self.window._native_history_operation is None)
+        self.assertEqual(pasted.read_text(), 'pasted')
+        self.window.redo_kio_operation()
+        self.wait_for(lambda: self.window.kio_redo_worker is None)
+        self.assertEqual((self.folders[0]/'service.txt').read_text(), 'service')

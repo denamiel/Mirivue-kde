@@ -31,6 +31,7 @@ class ClipboardUndoUi final : public KIO::FileUndoManager::UiInterface {
 public:
     void jobError(KIO::Job *job) override {
         if (historyOperation) historyOperation->error = job->errorString();
+        qWarning("Clipboard history failure: %s", qPrintable(job->errorString()));
         KIO::FileUndoManager::UiInterface::jobError(job);
     }
     bool copiedFileWasModified(const QUrl &src, const QUrl &dest,
