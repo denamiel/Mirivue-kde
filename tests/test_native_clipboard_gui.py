@@ -124,6 +124,20 @@ class TestNativeClipboardGui(parity.unittest.TestCase):
         self.settle()
         self.wait_for(lambda: path in self.window.selected_entries())
 
+    def test_image_format_choice_preserves_selected_jpeg_format(self):
+        image = QImage(4, 3, QImage.Format_RGB32)
+        image.fill(QColor('red'))
+        mime = QMimeData()
+        for format in ('PNG', 'JPEG'):
+            buffer = QBuffer()
+            buffer.open(QIODevice.WriteOnly)
+            self.assertTrue(image.save(buffer, format))
+            mime.setData('image/' + format.lower(), buffer.data())
+        self.app.clipboard().setMimeData(mime)
+        path = self.paste('chosen.jpg', format='jpeg')
+        self.assertTrue(path.read_bytes().startswith(bytes.fromhex('ffd8')))
+        self.assertEqual(QImage(str(path)).size(), image.size())
+
     def test_clipboard_change_during_format_dialog_is_handled_natively(self):
         mime = QMimeData()
         mime.setData('application/octet-stream', QByteArray(b'original'))

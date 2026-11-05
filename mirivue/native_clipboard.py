@@ -55,7 +55,11 @@ class NativeClipboardMixin:
         self.update_kio_redo_action(services._kio_redo_available)
 
     def paste_clipboard_content(self, destination, mime):
-        if getattr(self, '_native_clipboard_operation', None) is not None:
+        if (getattr(self, '_native_clipboard_operation', None) is not None
+                or getattr(self, '_native_history_operation', None) is not None):
+            return
+        if self.transfers_locked([destination]):
+            self.show_activity_message(tr('Attendez la fin du transfert vers ce dossier.'), 5000)
             return
         target = QUrl.fromLocalFile(str(destination)).toString()
         try:

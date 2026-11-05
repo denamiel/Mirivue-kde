@@ -172,6 +172,8 @@ class MovementMixin(BackgroundTransfers):
         return True
 
     def undo_remote_transfer(self):
+        if self.pending_transfers():
+            return
         if self.file_undo_history() and self.file_undo_history()[-1][0] == "main-kio":
             self.apply_main_kio_history(True)
             return
@@ -206,6 +208,8 @@ class MovementMixin(BackgroundTransfers):
         self.start_runtime_worker(worker, tr('Annulation KIO'))
 
     def redo_kio_operation(self):
+        if self.pending_transfers():
+            return
         if self.file_redo_history() and self.file_redo_history()[-1][0] == "main-kio":
             self.apply_main_kio_history(False)
             return
