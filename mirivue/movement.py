@@ -251,7 +251,8 @@ class MovementMixin(BackgroundTransfers):
     def create_kio_folder(self, name):
         if getattr(self, 'kio_directory_worker', None) is not None and self.kio_directory_worker.isRunning():
             return
-        worker = KioDirectoryWorker(self.folder, name, self)
+        pane, folder = self.bound_pane, self.folder
+        worker = KioDirectoryWorker(folder, name, self)
         self.kio_directory_worker = worker
         self.new_folder_action.setEnabled(False)
 
@@ -262,9 +263,17 @@ class MovementMixin(BackgroundTransfers):
                 return
             self.record_kio_history()
             self.show_activity_message(trf('Dossier « \x1f0\x1f » créé.', created_name), 5000)
-            self.scan()
+            if not getattr(pane, '_closed', False) and pane.folder == folder:
+                self.run_in_pane_silent(pane, self.scan)
+            self.refresh_other_panes([folder])
 
         worker.completed.connect(complete)
+        def finished():
+            if getattr(self, 'kio_directory_worker', None) is worker:
+                self.kio_directory_worker = None
+            self.new_folder_action.setEnabled(True)
+
+        worker.finished.connect(finished)
         worker.finished.connect(worker.deleteLater)
         self.start_runtime_worker(worker, tr('Création de dossier'))
 

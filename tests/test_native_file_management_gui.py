@@ -66,6 +66,15 @@ class TestNativeFileManagement(unittest.TestCase):
                 view.selectionModel().select(index, QItemSelectionModel.Select|QItemSelectionModel.Rows)
         self.assertEqual(set(self.window.selected_entries()), set(paths))
 
+    def test_repeated_folder_creation_releases_deleted_workers(self):
+        from PySide6.QtCore import QCoreApplication, QEvent
+        for name in ('Premier', 'Deuxième', 'Troisième'):
+            self.window.create_kio_folder(name)
+            self.wait_for(lambda: getattr(self.window, 'kio_directory_worker', None) is None)
+            QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+            self.assertTrue((self.folders[0]/name).is_dir())
+            self.settle()
+
     def test_native_properties_permissions_are_applied(self):
         path = self.folders[0]/'note.txt'
         path.chmod(0o600)
