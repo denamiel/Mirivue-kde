@@ -11,7 +11,12 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     if (argc != 2) { qCritical("usage: mirivue-kio-list URI"); return 2; }
-    const QUrl url = QUrl::fromUserInput(QString::fromLocal8Bit(argv[1]));
+    // A complete URL is parsed exactly; only scheme-less input keeps the
+    // historical user-input heuristics (C1: never trim a real file name).
+    const QString argument = QString::fromLocal8Bit(argv[1]);
+    QUrl url(argument, QUrl::TolerantMode);
+    if (!url.isValid() || url.scheme().isEmpty())
+        url = QUrl::fromUserInput(argument);
     if (!url.isValid() || url.scheme().isEmpty()) { qCritical("invalid URI"); return 2; }
     QJsonArray entries;
     KCoreDirLister lister;

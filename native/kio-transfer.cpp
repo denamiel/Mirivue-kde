@@ -6,6 +6,8 @@
 #include <KIO/CopyJob>
 #include <KIO/MkdirJob>
 
+#include <algorithm>
+
 class ProgressRelay : public QObject
 {
     Q_OBJECT
@@ -22,6 +24,12 @@ public slots:
     }
 };
 
+// Arguments are complete URLs produced by Mirivue; never trim them (C1).
+static QUrl argumentUrl(const char *argument)
+{
+    return QUrl(QString::fromLocal8Bit(argument), QUrl::TolerantMode);
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -30,7 +38,7 @@ int main(int argc, char **argv)
     if (command == "mkdir") {
         if (argc != 3)
             return 2;
-        const QUrl target = QUrl::fromUserInput(QString::fromLocal8Bit(argv[2]));
+        const QUrl target = argumentUrl(argv[2]);
         if (!target.isValid() || target.scheme().isEmpty())
             return 2;
         auto *job = KIO::mkdir(target);
@@ -52,8 +60,17 @@ int main(int argc, char **argv)
     QList<QUrl> sources;
     const int sourceEnd = trashing ? argc : argc - 1;
     for (int i = 2; i < sourceEnd; ++i)
-        sources << QUrl::fromUserInput(QString::fromLocal8Bit(argv[i]));
-    const QUrl destination = trashing ? QUrl(QStringLiteral("trash:/")) : QUrl::fromUserInput(QString::fromLocal8Bit(argv[argc - 1]));
+        sources << argumentUrl(argv[i]);
+    const QUrl destination = trashing ? QUrl(QStringLiteral("trash:/")) : argumentUrl(argv[argc - 1]);
+    const auto complete = [](const QUrl &value) { return value.isValid() && !value.scheme().isEmpty(); };
+    if (!complete(destination) || !std::all_of(sources.cbegin(), sources.cend(), complete)) {
+        QJsonObject output;
+        output.insert("ok", false);
+        output.insert("error", QStringLiteral("Requête KIO invalide : une source ou la destination n'est pas une URL complète."));
+        fprintf(stdout, "%s\n", QJsonDocument(output).toJson(QJsonDocument::Compact).constData());
+        fflush(stdout);
+        return 2;
+    }
     KIO::CopyJob *job = nullptr;
     if (trashing)
         job = KIO::trash(sources);

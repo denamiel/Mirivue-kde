@@ -3185,7 +3185,9 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         reason = self.selection_block_reason(paths)
         self.open_action.setText(tr('Ouvrir') if selected else tr('Ouvrir un dossier…'))
         self.close_search_action.setEnabled(self.search_active or self.search_panel.isVisible())
-        set_action_enabled(self.delete_button, writable, reason)
+        in_trash = self.is_trash_view()
+        set_action_enabled(self.delete_button, writable and not in_trash,
+                           reason or (tr('Les éléments de la corbeille ne peuvent être que supprimés définitivement ou restaurés.') if in_trash else ''))
         set_action_enabled(self.permanent_delete_action, writable, reason)
         self.select_all_action.setEnabled(self.proxy.rowCount() > 0)
         self.invert_selection_action.setEnabled(self.proxy.rowCount() > 0)
@@ -3440,9 +3442,13 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
     def refresh_delete_availability(self):
         """Update the shared Delete action before a pane can open its menu."""
         rows = [self.row(index) for index in self.selected_indexes()]
-        self.delete_button.setEnabled(
-            not self.scanning and not self.is_archive_view() and bool(rows)
-            and not self.movement_locked([row.path for row in rows]))
+        available = (not self.scanning and not self.is_archive_view() and bool(rows)
+                     and not self.movement_locked([row.path for row in rows]))
+        # Like Dolphin, "Move to Trash" does not apply inside Trash, while
+        # permanent deletion remains available there.
+        self.delete_button.setEnabled(available and not self.is_trash_view())
+        if hasattr(self, 'permanent_delete_action'):
+            self.permanent_delete_action.setEnabled(available)
 
     def update_delete_button(self, *args):
         busy = self.scanning
@@ -3459,8 +3465,6 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         self.duplicate_action.setEnabled(not busy and len(self.model.rows) > 1)
         self.keep_one_action.setEnabled(not busy and bool(self.duplicate_groups))
         self.refresh_delete_availability()
-        if hasattr(self, 'permanent_delete_action'):
-            self.permanent_delete_action.setEnabled(self.delete_button.isEnabled())
         if hasattr(self, tr('rename_action')):
             self.rename_action.setEnabled(not busy and not read_only_archive and bool(rows))
 
@@ -3812,6 +3816,12 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
     def delete_selected(self, requested_mode=None):
         if self.is_archive_view():
             return
+        if self.is_trash_view():
+            # Like Dolphin, Trash offers no "Move to Trash"; permanent deletion
+            # uses the dedicated Trash path.
+            if requested_mode == tr('permanent'):
+                return self.delete_selected_from_trash()
+            return
         paths = self.selected_entries()
         if not paths or self.scanning:
             return
@@ -3824,8 +3834,10 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         if self.movement_locked(paths):
             QMessageBox.information(self, tr('Opérations en cours'), tr('Un élément sélectionné ou un fichier de ce dossier est utilisé par une opération. Attendez sa fin ou annulez-la.'))
             return False
+        # Remote KIO rows are URL strings: the local fingerprint applies to paths only.
+        local = [Path(p) for p in paths if not Location.from_value(p).is_uri]
         try:
-            signatures = {p: fingerprint(p) for p in paths}
+            signatures = {p: fingerprint(p) for p in local}
         except OSError:
             QMessageBox.warning(self, tr('Sélection modifiée'), tr('Un élément n’est plus accessible. Actualisez la vue avant de recommencer.'))
             return
@@ -3841,7 +3853,8 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             QMessageBox.warning(self, tr('Sélection modifiée'), tr('La sélection a changé. Actualisez la vue puis recommencez.'))
             return
         return self.start_kio_transfer(
-            [QUrl.fromLocalFile(str(path)).toString() for path in paths],
+            [str(path) if Location.from_value(path).is_uri else QUrl.fromLocalFile(str(path)).toString()
+             for path in paths],
             tr('trash:/'), operation=tr('trash') if mode == tr('trash') else tr('delete'),
             on_success=self.reload_places,
         )
@@ -4691,7 +4704,7 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         set_themed_action_icon(open_action, tr('document-open'))
         menu.addSeparator()
         delete_action = add_destructive_action(menu, tr('Supprimer définitivement…'), self.delete_selected_from_trash, tr('edit-delete'))
-        delete_action.setEnabled(self.delete_button.isEnabled())
+        delete_action.setEnabled(self.permanent_delete_action.isEnabled())
         menu.addSeparator()
         properties = menu.addAction(tr('Propriétés'), self.basic_properties)
         properties.setProperty('_mirivue_context_properties', True)

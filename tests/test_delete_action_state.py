@@ -16,7 +16,7 @@ class TestDeleteActionState(unittest.TestCase):
         values = []
         pane = SimpleNamespace(scanning=False,
             selected_indexes=lambda: [0], row=lambda i: SimpleNamespace(path=Path('/mnt/data/example')),
-            is_archive_view=lambda: False, movement_locked=lambda paths: False,
+            is_archive_view=lambda: False, is_trash_view=lambda: False, movement_locked=lambda paths: False,
             delete_button=SimpleNamespace(setEnabled=values.append))
         ns['refresh_delete_availability'](pane)
         self.assertEqual(values, [True])
@@ -25,7 +25,28 @@ class TestDeleteActionState(unittest.TestCase):
         values = []
         pane = SimpleNamespace(scanning=False,
             selected_indexes=lambda: [0], row=lambda i: SimpleNamespace(path=Path('/mnt/data/example')),
-            is_archive_view=lambda: False, movement_locked=lambda paths: True,
+            is_archive_view=lambda: False, is_trash_view=lambda: False, movement_locked=lambda paths: True,
             delete_button=SimpleNamespace(setEnabled=values.append))
         ns['refresh_delete_availability'](pane)
         self.assertEqual(values, [False])
+
+    def test_trash_view_disables_move_to_trash_but_keeps_permanent_deletion(self):
+        trash, permanent = [], []
+        pane = SimpleNamespace(scanning=False,
+            selected_indexes=lambda: [0], row=lambda i: SimpleNamespace(path='trash:/0-example'),
+            is_archive_view=lambda: False, is_trash_view=lambda: True, movement_locked=lambda paths: False,
+            delete_button=SimpleNamespace(setEnabled=trash.append),
+            permanent_delete_action=SimpleNamespace(setEnabled=permanent.append))
+        ns['refresh_delete_availability'](pane)
+        self.assertEqual(trash, [False])
+        self.assertEqual(permanent, [True])
+
+    def test_permanent_deletion_follows_ordinary_availability(self):
+        trash, permanent = [], []
+        pane = SimpleNamespace(scanning=True,
+            selected_indexes=lambda: [0], row=lambda i: SimpleNamespace(path=Path('/mnt/data/example')),
+            is_archive_view=lambda: False, is_trash_view=lambda: False, movement_locked=lambda paths: False,
+            delete_button=SimpleNamespace(setEnabled=trash.append),
+            permanent_delete_action=SimpleNamespace(setEnabled=permanent.append))
+        ns['refresh_delete_availability'](pane)
+        self.assertEqual((trash, permanent), ([False], [False]))

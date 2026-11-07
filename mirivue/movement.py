@@ -11,6 +11,17 @@ from .extensions import Rename, apply_renames, fingerprint
 from .locations import Location
 from .platform_services import services
 
+def kio_source_url(path):
+    """Return the KIO URL of a selected source without following a symlink.
+
+    Location.uri resolves symlinks, which suits destinations but not sources:
+    like Dolphin, KIO must act on the link itself.
+    """
+    location = Location.from_value(path)
+    if location.is_uri:
+        return location.value
+    return QUrl.fromLocalFile(str(location.path.absolute())).toString()
+
 def cancelled_existing_file_conflict(sources, destination, error):
     """Recognize KIO's empty-error response to cancelling one local conflict.
 
@@ -538,7 +549,7 @@ class MovementMixin(BackgroundTransfers):
     def drop_operation(self, paths, destination, operation):
         """Perform a drop with the same KIO operations exposed by Dolphin."""
         if operation in (tr('link'), tr('trash')):
-            sources = [Location.from_value(path).uri for path in paths]
+            sources = [kio_source_url(path) for path in paths]
             target = tr('trash:/') if operation == tr('trash') else Location.from_value(destination).uri
             return self.start_kio_transfer(sources, target, operation=operation)
         return self.move_entries(paths, destination, confirmed=True, copy_only=operation == tr('copy'))
@@ -738,7 +749,7 @@ class MovementMixin(BackgroundTransfers):
                 answer = QMessageBox.question(self, tr('Déplacer la sélection'), trf('Déplacer 0 élément(s) vers :\n1', len(raw_paths), raw_destination), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
                 if answer != QMessageBox.StandardButton.Yes:
                     return
-            sources = [Location.from_value(path).uri for path in raw_paths]
+            sources = [kio_source_url(path) for path in raw_paths]
             destination_uri = Location.from_value(raw_destination).uri
             return self.start_kio_transfer(sources, destination_uri, move=not copy_only, clipboard_guard=clipboard_guard)
         paths = normalize_sources(paths)
