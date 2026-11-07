@@ -3837,11 +3837,16 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             if requested_mode == tr('permanent'):
                 return self.delete_selected_from_trash()
             return
-        if requested_mode != tr('permanent') and not self.selection_supports_trash(
-                [self.row(index) for index in self.selected_indexes()]):
+        rows = [self.row(index) for index in self.selected_indexes()]
+        if requested_mode != tr('permanent') and not self.selection_supports_trash(rows):
             # Never turn "Move to Trash" into a permanent deletion.
             self.show_activity_message(tr('Ces éléments distants ne peuvent pas être mis à la corbeille. Utilisez « Supprimer définitivement » (Maj+Suppr).'), 8000)
             return
+        # A KIO row is trashable through its UDS_LOCAL_PATH: send that local
+        # path to KIO::trash(). Forwarding URLs such as desktop:/ are moved to
+        # Trash but reported as failed by KIO when trashed by their own URL.
+        trash_paths = {str(row.path): Path(row.local_path) for row in rows
+                       if isinstance(row.path, str) and getattr(row, 'local_path', '')}
         paths = self.selected_entries()
         if not paths or self.scanning:
             return
@@ -3856,6 +3861,10 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             return False
         # Remote KIO rows are URL strings: the local fingerprint applies to paths only.
         local = [Path(p) for p in paths if not Location.from_value(p).is_uri]
+        trash_by_local_path = requested_mode != tr('permanent')
+        if trash_by_local_path:
+            local += [trash_paths[str(p)] for p in paths
+                      if Location.from_value(p).is_uri and str(p) in trash_paths]
         try:
             signatures = {p: fingerprint(p) for p in local}
         except OSError:
@@ -3872,9 +3881,14 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         except OSError:
             QMessageBox.warning(self, tr('Sélection modifiée'), tr('La sélection a changé. Actualisez la vue puis recommencez.'))
             return
+        def kio_url(path):
+            if not Location.from_value(path).is_uri:
+                return QUrl.fromLocalFile(str(path)).toString()
+            if mode == tr('trash') and str(path) in trash_paths:
+                return QUrl.fromLocalFile(str(trash_paths[str(path)])).toString()
+            return str(path)
         return self.start_kio_transfer(
-            [str(path) if Location.from_value(path).is_uri else QUrl.fromLocalFile(str(path)).toString()
-             for path in paths],
+            [kio_url(path) for path in paths],
             tr('trash:/'), operation=tr('trash') if mode == tr('trash') else tr('delete'),
             on_success=self.reload_places,
         )

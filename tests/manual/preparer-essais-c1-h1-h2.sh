@@ -48,10 +48,11 @@ if [[ -e "$racine" ]]; then
 fi
 
 l="$racine/local"
-mkdir -p -- "$l/Dossier" "$l/Dossier " "$l/Photos" "$l/Destination" "$racine/distant"
-printf 'AUTRE\n'  > "$l/photo"
-printf 'CIBLE\n'  > "$l/photo "
-printf 'CIBLE2\n' > "$l/photo2 "
+mkdir -p -- "$l/Dossier" "$l/Dossier " "$l/Photos" "$l/Destination"
+# Tailles différentes : la colonne Taille distingue « photo » et « photo␠ ».
+printf 'AUTRE\n' > "$l/photo"
+printf 'CIBLE : ce fichier porte un espace à la fin de son nom.\n' > "$l/photo "
+printf 'CIBLE2 : ce fichier porte aussi un espace final.\n' > "$l/photo2 "
 printf 'INTRUS\n' > "$l/Dossier/intrus.txt"
 printf 'ATTENDU\n' > "$l/Dossier /attendu.txt"
 printf 'SOURCE\n' > "$l/source.txt"
@@ -61,11 +62,5 @@ printf 'B\n' > "$l/Photos/b.jpg"
 ln -s cible.txt "$l/lien-fichier.txt"
 ln -s Photos "$l/lien-dossier"
 ln -s fichier-absent "$l/lien-casse"
-d="$racine/distant"
-printf 'AUTRE\n' > "$d/photo"
-printf 'CIBLE\n' > "$d/photo "
-printf 'DISTANT\n' > "$d/distant.txt"
-printf 'CIBLE DU LIEN\n' > "$d/cible.txt"
-ln -s cible.txt "$d/lien.txt"
 echo "Dossier d'essai créé."
 afficher

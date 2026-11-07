@@ -379,14 +379,47 @@ class TestH2RemoteRowsCanBeDeleted(IsolatedKioTestCase):
         self.assertEqual(harness.requests, [])
         self.assertEqual(len(harness.messages), 1)
 
-    def test_trash_of_kio_row_with_local_path_sends_the_unchanged_url(self):
-        uri = 'desktop:/file.txt'
-        row = remote_entry(uri, 'file.txt', local_path=str(self.directory / 'file.txt'))
-        harness = Harness([row], 'desktop:/', record_only=True)
+    def test_trash_of_kio_row_uses_its_local_path_end_to_end(self):
+        # Eligibility comes from UDS_LOCAL_PATH, so KIO must receive that path:
+        # forwarding URLs (desktop:/...) are trashed but reported as failed.
+        local = write(self.directory / 'file.txt', 'X')
+        row = remote_entry('desktop:/file.txt', 'file.txt', local_path=str(local))
+        harness = Harness([row], 'desktop:/')
         harness.refresh_delete_availability()
         self.assertTrue(harness.delete_button.isEnabled())
         harness.delete_selected('trash')
-        self.assertEqual([(r['sources'], r['operation']) for r in harness.requests], [([uri], 'trash')])
+        request = harness.requests[-1]
+        self.assertEqual(request['sources'], [QUrl.fromLocalFile(str(local)).toString()])
+        self.assertTrue(request['ok'], request)
+        self.assertFalse(local.exists())
+        self.assertEqual(self.trashed(), [str(local)])
+
+    def test_permanent_deletion_of_kio_row_keeps_its_url(self):
+        row = remote_entry('desktop:/file.txt', 'file.txt', local_path=str(self.directory / 'file.txt'))
+        harness = Harness([row], 'desktop:/', record_only=True)
+        harness.delete_selected('permanent')
+        self.assertEqual([(r['sources'], r['operation']) for r in harness.requests],
+                         [(['desktop:/file.txt'], 'delete')])
+
+    def test_trash_of_real_desktop_row_reports_success(self):
+        import glob
+        import json
+        import subprocess
+        if not glob.glob('/usr/lib*/qt6/plugins/kf6/kio/desktop.so'):
+            self.skipTest('Plasma desktop:/ KIO worker not installed')
+        desktop = Path(os.environ['HOME']) / 'Desktop'
+        name = f'desktop-{self.directory.name}.txt'
+        local = write(desktop / name, 'X')
+        listed = subprocess.run([services.tool_path('mirivue-kio-list'), 'desktop:/'], capture_output=True,
+                                text=True, timeout=TRANSFER_DEADLINE)
+        entry = next(item for item in json.loads(listed.stdout.splitlines()[-1])['entries'] if item['name'] == name)
+        self.assertEqual(entry['localPath'], str(local))
+        row = remote_entry(entry['url'], name, local_path=entry['localPath'])
+        harness = Harness([row], 'desktop:/')
+        harness.delete_selected('trash')
+        self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
+        self.assertFalse(local.exists())
+        self.assertEqual(self.trashed(), [str(local)])
 
     def test_trash_support_follows_local_paths(self):
         supports = mirivue_app.Window.selection_supports_trash

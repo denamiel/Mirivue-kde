@@ -147,13 +147,61 @@ test : la configuration SSH de la session n’est ni lue ni modifiée.
   **aucune différence** avec le code d’origine ; les deux suites dépendant de la
   langue réussissent en `LANG=C.UTF-8`.
 
+## Troisième tour, après la deuxième revue
+
+### Constat démontré : éligibilité et URL envoyée à KIO
+
+`selection_supports_trash()` admettait une ligne KIO grâce à son
+`UDS_LOCAL_PATH`, mais `delete_selected()` envoyait ensuite son URI à
+`KIO::trash()`. Mesure directe (sonde C++, worker Plasma `desktop`) :
+`KIO::trash("desktop:/fichier")` déplace bien le fichier dans la Corbeille,
+mais la tâche signale un échec (`ERR_UNSUPPORTED_ACTION`, « Changing the
+attributes of files is not supported with protocol trash »). Dans Mirivue,
+l’erreur s’affichait en boîte modale dans le service : la requête restait sans
+réponse jusqu’à l’arrêt du service, alors que l’élément était déjà dans la
+Corbeille. Il n’y avait pas de suppression, mais un faux échec. Le même essai
+par `file://` (le chemin local) réussit sans erreur.
+
+### Correction
+
+Pour une mise à la corbeille, une ligne KIO admise par son chemin local est
+transmise par ce chemin (`file://`). Ce chemin est aussi soumis au contrôle
+d’empreinte avant envoi. La suppression définitive garde l’URI d’origine.
+
+### Tests
+
+- `test_trash_of_kio_row_uses_its_local_path_end_to_end` : vrai service, vraie
+  Corbeille isolée ; vérifie l’URL réellement envoyée, la réussite signalée et
+  l’entrée de Corbeille. Fonctionne sans le worker Plasma (CI comprise).
+- `test_trash_of_real_desktop_row_reports_success` : chaîne réelle
+  `kio-list desktop:/` → ligne Mirivue → mise à la corbeille. Exécuté seulement
+  si le worker `desktop` est installé ; ce n’est pas le cas dans le conteneur
+  de CI.
+- `test_permanent_deletion_of_kio_row_keeps_its_url` : la suppression
+  définitive envoie toujours l’URI.
+- Sur `6b54b73`, les deux premiers échouent : URI envoyée au lieu du chemin
+  local, puis faux échec. Sur la branche : **43/43**, aucun test sauté en local.
+
+### Procédure manuelle
+
+La procédure ne démarre plus de serveur SSH : `sshd` écoute par défaut sur
+toutes les interfaces, et la zone de pare-feu Fedora Workstation peut
+l’autoriser. Un seul script prépare tout :
+`tests/manual/lancer-validation-c1-h1-h2.sh`. Il ne change pas de branche, ne
+touche pas au paquet installé, demande avant tout `sudo dnf install`, et
+travaille uniquement dans `/var/tmp/mirivue-validation-$USER` et
+`~/Mirivue-essais-C1H1H2`.
+
 ## Limites
 
 - Aucune session Plasma réelle : rendu, focus, glisser-déposer à la souris et
   dialogues de confirmation KDE ne sont pas observés.
 - Les confirmations KIO sont désactivées dans les essais automatisés.
 - SFTP est vérifié sur un serveur local réel ; SMB ne l’est pas (même chemin
-  KIO, à confirmer sur un partage de test).
+  KIO, à confirmer sur un partage de test maîtrisé).
+- Déposer une ligne `desktop:/` sur un panneau Corbeille passe encore son URI à
+  KIO : faux échec possible, l’élément étant tout de même mis à la Corbeille.
+  Le glisser-déposer ne connaît pas le chemin local de la ligne.
 - 31 suites graphiques et les tests natifs C++ (`native/tests`) n’ont pas été
   exécutés.
 
@@ -173,5 +221,5 @@ test : la configuration SSH de la session n’est ni lue ni modifiée.
 ## Validation manuelle restant à faire
 
 Procédure complète, avec fichiers d’essai isolés :
-`docs/VALIDATION-MANUELLE-C1-H1-H2.md` et
-`tests/manual/preparer-essais-c1-h1-h2.sh`.
+`docs/VALIDATION-MANUELLE-C1-H1-H2.md`, lancée par
+`tests/manual/lancer-validation-c1-h1-h2.sh`.
