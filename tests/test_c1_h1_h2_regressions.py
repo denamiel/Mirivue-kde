@@ -5,7 +5,7 @@ C1  A name ending with Unicode whitespace was trimmed by QUrl::fromUserInput()
     item ("photo " -> "photo").
 H1  Sources dropped on Trash, or sent to a URI destination, were resolved with
     Path.resolve(): the symlink target was trashed or copied instead of the link.
-H2  Deleting a remote KIO row (sftp, smb, trash, desktop...) raised
+H2  Deleting a non-local KIO row (sftp, smb, trash, desktop...) raised
     AttributeError before any KIO request.
 
 The real window methods and the real native KIO service are used, with only the
@@ -310,14 +310,17 @@ class TestH1SymlinkSourcesAreNotResolved(IsolatedKioTestCase):
         self.assertEqual(self.trashed(), [str(link)])
 
     def test_copy_symlink_to_uri_destination_copies_the_link(self):
+        # A file:// destination string takes move_entries' URI branch, using
+        # only workers shipped with KIO core (no Plasma desktop:/ worker).
         target, link = self.file_link()
-        desktop = Path(os.environ['HOME']) / 'Desktop'
-        desktop.mkdir(exist_ok=True)
+        inside = self.directory / 'inside'
+        inside.mkdir()
         harness = Harness([], str(self.directory))
-        harness.move_entries([link], 'desktop:/', confirmed=True, copy_only=True)
+        harness.move_entries([link], QUrl.fromLocalFile(str(inside)).toString(), confirmed=True, copy_only=True)
         self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
-        self.assertTrue((desktop / 'link.txt').is_symlink())
-        self.assertFalse((desktop / 'target.txt').exists())
+        self.assertEqual(harness.requests[-1]['sources'], [QUrl.fromLocalFile(str(link)).toString()])
+        self.assertTrue((inside / 'link.txt').is_symlink())
+        self.assertFalse((inside / 'target.txt').exists())
         self.assertEqual(state(target), 'TARGET')
 
     def test_drop_move_of_symlink_moves_the_link_only(self):
@@ -382,12 +385,20 @@ class TestH2RemoteRowsCanBeDeleted(IsolatedKioTestCase):
         self.assertEqual([(r['sources'], r['operation']) for r in harness.requests],
                          [(['trash:/0-file.txt'], 'delete')])
 
-    def test_permanent_deletion_of_desktop_row_end_to_end(self):
-        desktop_file = write(Path(os.environ['HOME']) / 'Desktop' / 'to-delete.txt', 'X')
-        harness = Harness([remote_entry('desktop:/to-delete.txt', 'to-delete.txt')], 'desktop:/')
+    def test_permanent_deletion_of_trash_row_end_to_end(self):
+        # Real non-file KIO row, provided by KIO core's trash worker.
+        name = f'to-delete-{self.directory.name}.txt'
+        victim = write(self.directory / name, 'X')
+        ok, error = services._kio_service_request('trash', sources=[victim.as_uri()], timeout=TRANSFER_DEADLINE)
+        self.assertTrue(ok, error)
+        trashed = self.trash / 'files' / name
+        self.assertTrue(trashed.exists(), 'the isolated Trash was not used')
+        harness = Harness([remote_entry('trash:/0-' + name, name)], 'trash:/')
         harness.delete_selected('permanent')
         self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
-        self.assertFalse(desktop_file.exists())
+        self.assertEqual(harness.requests[-1]['operation'], 'delete')
+        self.assertFalse(trashed.exists())
+        self.assertFalse((self.trash / 'info' / (name + '.trashinfo')).exists())
 
 
 class TestNativeHelpersRejectIncompleteUrls(IsolatedKioTestCase):
