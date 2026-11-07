@@ -4935,8 +4935,9 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             )
             set_themed_action_icon(run_in_konsole, tr('utilities-terminal'))
             mark_entry(run_in_konsole, 'run_in_konsole')
-        if count == 1 and not row.is_dir and str(row.path.parent) != str(self.folder):
-            show_in_folder = menu.addAction(tr('Afficher dans le dossier'), lambda: self.open_url(row.path.parent))
+        parent = parent_location(row.path) if count == 1 and not row.is_dir else None
+        if parent is not None and QUrl(Location.from_value(parent).uri) != QUrl(Location.from_value(self.folder).uri):
+            show_in_folder = menu.addAction(tr('Afficher dans le dossier'), lambda checked=False, target=parent: self.open_url(target))
             set_themed_action_icon(show_in_folder, tr('document-open-folder'))
         elif count == 1 and row.is_dir:
             add_place = menu.addAction(tr('Ajouter aux emplacements'), lambda target=row.path: self.add_place(target))

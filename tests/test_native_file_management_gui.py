@@ -66,6 +66,21 @@ class TestNativeFileManagement(unittest.TestCase):
                 view.selectionModel().select(index, QItemSelectionModel.Select|QItemSelectionModel.Rows)
         self.assertEqual(set(self.window.selected_entries()), set(paths))
 
+    def test_file_context_menu_accepts_uri_rows_and_opens_their_parent(self):
+        from mirivue.metadata import remote_entry
+        for uri in ('smb://server/share/Dossier/été.txt', 'sftp://user@server/home/user/report.txt'):
+            row = remote_entry(uri, 'report.txt')
+            opened = []
+            with patch.object(self.window, 'selected_indexes', return_value=[0]), \\
+                 patch.object(self.window, 'row', return_value=row), \\
+                 patch.object(self.window, 'open_url', side_effect=opened.append):
+                menu = self.window.file_context_menu(row)
+                action = next(action for action in menu.actions() if action.text() == 'Afficher dans le dossier')
+                action.trigger()
+                from mirivue.locations import parent_location
+                self.assertEqual(opened, [parent_location(uri)])
+                menu.deleteLater()
+
     def test_repeated_folder_creation_releases_deleted_workers(self):
         from PySide6.QtCore import QCoreApplication, QEvent
         for name in ('Premier', 'Deuxième', 'Troisième'):
