@@ -60,7 +60,7 @@ Corbeille). Gardez `local` à gauche.
 |---|---|---|---|
 | 3.1 | Glissez `lien-fichier.txt` dans le panneau Corbeille | Seul le lien part ; `cible.txt` reste | |
 | 3.2 | Glissez `lien-dossier` dans le panneau Corbeille | Seul le lien part ; `Photos` et ses images restent | |
-| 3.3 | Glissez `lien-casse` dans le panneau Corbeille | Le lien part sans erreur | |
+| 3.3 | `lien-casse` est visible dans la liste (même après **F5**) ; glissez-le dans le panneau Corbeille *(seulement après la revue du correctif des liens cassés)* | Le lien est visible, puis part sans erreur | |
 | 3.4 | Maintenez **Ctrl** et glissez `cible.txt` vers `Destination` (copie) | `Destination/cible.txt` apparaît ; l’original reste | |
 
 ## 4. Corbeille

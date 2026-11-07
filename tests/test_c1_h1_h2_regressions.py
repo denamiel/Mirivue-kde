@@ -559,6 +559,77 @@ print(json.dumps({'identity': json.loads(library.mirivue_places_location_identit
         self.assertEqual(names, ['expected.txt'])
 
 
+class TestDanglingSymlinksAreListed(IsolatedKioTestCase):
+    """KIO and Dolphin list dangling symlinks; Mirivue must not hide them."""
+
+    def setUp(self):
+        super().setUp()
+        d = self.directory
+        write(d / 'target.txt', 'TARGET CONTENT')
+        (d / 'Folder').mkdir()
+        (d / 'valid-link.txt').symlink_to('target.txt')
+        (d / 'valid-folder-link').symlink_to('Folder')
+        (d / 'broken-link').symlink_to('missing-file')
+        (d / 'broken-folder-link').symlink_to('missing-folder/')
+        (d / 'broken-link.mkv').symlink_to('missing-film.mkv')
+        self.names = sorted(path.name for path in d.iterdir())
+
+    def scan(self):
+        rows = []
+        scanner = mirivue_app.Scanner(str(self.directory), False, True)
+        scanner.initial.connect(rows.extend)
+        scanner.run()
+        return {row.path.name: row for row in rows}
+
+    def test_first_inventory_lists_dangling_symlinks(self):
+        rows = self.scan()
+        self.assertEqual(sorted(rows), self.names)
+        for name in ('broken-link', 'broken-folder-link', 'broken-link.mkv'):
+            with self.subTest(name=name):
+                row = rows[name]
+                self.assertFalse(row.error, row.error)
+                self.assertFalse(row.is_dir)
+                self.assertEqual(row.sort_values[1], (self.directory / name).lstat().st_size)
+                self.assertIsNotNone(row.modified_ns)
+
+    def test_dangling_media_link_is_a_plain_entry(self):
+        row = self.scan()['broken-link.mkv']
+        self.assertFalse(row.is_video)
+        self.assertEqual(row.media_type, 'other')
+
+    def test_valid_symlink_keeps_target_metadata(self):
+        rows = self.scan()
+        self.assertEqual(rows['valid-link.txt'].sort_values[1], len('TARGET CONTENT'))
+        self.assertTrue(rows['valid-folder-link'].is_dir)
+
+    def test_refresh_keeps_dangling_symlinks(self):
+        self.scan()
+        (self.directory / 'another-broken-link').symlink_to('also-missing')
+        self.assertEqual(sorted(self.scan()), sorted([*self.names, 'another-broken-link']))   # F5
+
+    def test_watcher_snapshot_and_changed_entries_keep_dangling_symlinks(self):
+        from mirivue.directory_listing import directory_snapshot
+        self.assertEqual(sorted(path.name for path in directory_snapshot(self.directory)), self.names)
+        found = []
+        worker = mirivue_app.ChangedEntriesWorker(
+            [self.directory / 'broken-link', self.directory / 'broken-link.mkv'], read_metadata=True)
+        worker.found.connect(found.append)
+        worker.run()
+        self.assertEqual([(row.path.name, row.error) for row in found],
+                         [('broken-link', ''), ('broken-link.mkv', '')])
+
+    def test_trashing_a_dangling_symlink_removes_only_the_link(self):
+        link = self.directory / 'broken-link'
+        harness = Harness([self.scan()['broken-link']], str(self.directory))
+        harness.delete_selected('trash')
+        self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
+        self.assertFalse(link.is_symlink())
+        self.assertEqual(self.trashed(), [str(link)])
+        self.assertEqual(sorted(path.name for path in self.directory.iterdir()),
+                         [name for name in self.names if name != 'broken-link'])
+        self.assertEqual(state(self.directory / 'target.txt'), 'TARGET CONTENT')
+
+
 class TestKdeConfirmationsAreRespected(IsolatedKioTestCase):
     """With KDE confirmations enabled, nothing is removed without an answer."""
 

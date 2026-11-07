@@ -39,7 +39,7 @@ from .actions_extra import ExtraActionsMixin
 from .desktop import DesktopMixin
 from .panes import PaneMixin
 from .movement import MovementMixin
-from .metadata import HEADERS, EXTENSIONS, inspect, failed, quantity, basic_entry, remote_entry, update_modification, modification_text, normalized_date_format
+from .metadata import HEADERS, EXTENSIONS, inspect, failed, quantity, basic_entry, is_dangling_symlink, remote_entry, update_modification, modification_text, normalized_date_format
 from .locations import ARCHIVE_PROTOCOLS, Location, archive_protocol, archive_source_path, archive_subfolder_name, archive_url, parent_location
 from .launch_targets import LaunchRequest, parse_launch_arguments, parse_launch_requests, is_browsable_location
 from .external_locations import ExternalLocationsMixin
@@ -243,6 +243,8 @@ class ChangedEntriesWorker(QThread):
             try:
                 if path.is_dir():
                     row = basic_entry(path, True)
+                elif is_dangling_symlink(path):
+                    row = basic_entry(path)
                 elif path.suffix.lower() in EXTENSIONS | AUDIO_EXT | IMAGE_EXT:
                     row = inspect(path, self.isInterruptionRequested) if self.read_metadata else listed_media_entry(path, self.isInterruptionRequested)
                 else:

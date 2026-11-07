@@ -558,9 +558,22 @@ def failed(path, error):
     detail = tr('Informations multimédias non lues. Le fichier peut être incomplet, inaccessible ou dans un format non reconnu. Aucun contenu n’a été modifié.') + '\n\n' + str(error)
     return Video(path, [path.name] + [tr('—')] * 9 + [tr('Erreur'), tr('Indéterminée'), '', '', ''], [path.name.casefold(), -1, -1, -1, '', -1, -1, '', '', -1, tr('Erreur'), tr('indéterminée'), -1, -1, -1], detail, metadata_loaded=True)
 
+def is_dangling_symlink(path):
+    """A symlink whose target is missing: listed by KIO and Dolphin, never probed."""
+    return path.is_symlink() and not path.exists()
+
+def entry_stat(path):
+    """Target metadata as before; a dangling symlink falls back to its own lstat()."""
+    try:
+        return path.stat()
+    except OSError:
+        if path.is_symlink():
+            return path.lstat()
+        raise
+
 def basic_entry(path, is_dir=False, *, hidden=None):
     row = Video(path, is_dir=is_dir, is_video=False, media_type=tr('folder') if is_dir else tr('other'), is_hidden=hidden)
-    size = None if is_dir else path.stat().st_size
+    size = None if is_dir else entry_stat(path).st_size
     row.values = [path.name, quantity(size, [tr('o'), tr('Kio'), tr('Mio'), tr('Gio'), tr('Tio')], 1024)] + [''] * 8 + [tr('Dossier') if is_dir else tr('Autre fichier'), '', '', '', '']
     row.sort_values = [path.name.casefold(), size or 0, -1, -1, '', -1, -1, '', '', -1, row.values[10], '', -1, -1, -1]
     row.file_signature = fingerprint(path)
@@ -590,7 +603,7 @@ def update_modification(row):
     while len(row.sort_values) < len(HEADERS):
         row.sort_values.append(-1)
     try:
-        info = row.path.stat()
+        info = entry_stat(row.path)
         row.modified_ns = info.st_mtime_ns
         row.accessed_ns = info.st_atime_ns
     except OSError:

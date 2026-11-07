@@ -192,6 +192,42 @@ touche pas au paquet installé, demande avant tout `sudo dnf install`, et
 travaille uniquement dans `/var/tmp/mirivue-validation-$USER` et
 `~/Mirivue-essais-C1H1H2`.
 
+## Quatrième tour : liens symboliques cassés invisibles
+
+### Constat (validation Plasma réelle, puis reproduction automatisée)
+
+Un lien cassé (`lien-casse -> fichier-absent`) est listé par `kio-list`
+(`KCoreDirLister`, comme Dolphin) mais absent de Mirivue, même après F5.
+Le défaut existait déjà dans la beta.5. Il a été reproduit avec les fonctions
+réelles sur trois liens cassés (fichier, dossier, `.mkv`) :
+
+- `basic_entry()` appelait `path.stat()`, qui suit le lien vers une cible
+  absente ; `Scanner.run()` ignorait l’erreur et l’entrée disparaissait ;
+- `directory_snapshot()` faisait de même : les notifications de dossier ne
+  pouvaient pas faire apparaître ces liens ;
+- `ChangedEntriesWorker` les affichait comme « Informations multimédias non
+  lues ».
+
+### Correction
+
+- `metadata.entry_stat()` : `stat()` de la cible comme avant (liens valides et
+  fichiers inchangés) ; repli sur `lstat()` uniquement pour un lien cassé.
+  Utilisé par `basic_entry()`, `update_modification()` et `directory_snapshot()`.
+- `metadata.is_dangling_symlink()` : un lien cassé, même avec une extension
+  média, devient une entrée simple, sans lecture de média ni durée
+  (`listed_media_entry()`, `ChangedEntriesWorker`).
+
+Les liens cassés affichent la taille et la date du lien lui-même, comme Dolphin.
+
+### Tests
+
+`TestDanglingSymlinksAreListed` (6 tests) : premier inventaire, F5, instantané
+de surveillance et `ChangedEntriesWorker`, lien média cassé traité comme entrée
+simple, liens valides gardant les métadonnées de leur cible, mise à la
+corbeille du lien seul. Sur `9c40eee`, 5 échouent ; le test des liens valides
+réussit partout (garde-fou). Suite complète : **49/49**. Non-régression :
+100 suites, aucune différence avec le code d’origine.
+
 ## Limites
 
 - Aucune session Plasma réelle : rendu, focus, glisser-déposer à la souris et
