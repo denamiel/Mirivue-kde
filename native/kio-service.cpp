@@ -73,7 +73,10 @@ private:
 
     static QUrl url(const QJsonValue &value)
     {
-        return QUrl::fromUserInput(value.toString());
+        // Requests carry complete URLs produced by Mirivue, not user input.
+        // QUrl::fromUserInput() trims whitespace and would act on another
+        // file when a name ends with a space (C1).
+        return QUrl(value.toString(), QUrl::TolerantMode);
     }
 
     void write(const QJsonObject &object)
@@ -118,7 +121,10 @@ private:
         if (job->error() == KIO::ERR_USER_CANCELED)
             result.insert("error", "Transfert annulé.");
         else if (job->error())
-            result.insert("error", job->errorText());
+            // For KIO jobs errorText() is only the error argument (often a
+            // bare URL); errorString() is the complete message. Keep an empty
+            // text empty: Mirivue recognises a cancelled conflict by it.
+            result.insert("error", job->errorText().isEmpty() ? QString() : job->errorString());
         result.insert("undo_available", undo->isUndoAvailable());
         result.insert("undo_text", undo->undoText());
         result.insert("redo_available", undo->isRedoAvailable());
@@ -160,10 +166,18 @@ private:
             return;
         }
         QList<QUrl> sources;
+        bool invalidSource = false;
         for (const QJsonValue &value : request.value("sources").toArray()) {
             const QUrl source = url(value);
             if (source.isValid() && !source.scheme().isEmpty())
                 sources.append(source);
+            else
+                invalidSource = true;
+        }
+        // All or nothing: never operate on a silently reduced selection.
+        if (invalidSource) {
+            write({{"event", "complete"}, {"id", id}, {"ok", false}, {"error", "Requête KIO invalide : une source n'est pas une URL complète."}});
+            return;
         }
         if (sources.isEmpty()) {
             write({{"event", "complete"}, {"id", id}, {"ok", false}, {"error", "Aucune source KIO valide."}});

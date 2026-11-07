@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "location-url.h"
 #include <QApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -89,7 +90,7 @@ int main(int argc, char **argv)
         result.insert(QStringLiteral("ok"), true);
         result.insert(QStringLiteral("places"), placesJson(model));
     } else if (args.size() == 5 && args.at(1) == QStringLiteral("add")) {
-        const QUrl url = QUrl::fromUserInput(args.at(3));
+        const QUrl url = mirivueLocationUrl(args.at(3));
         if (!url.isValid() || url.isEmpty()) {
             result.insert(QStringLiteral("ok"), false);
             result.insert(QStringLiteral("error"), QStringLiteral("invalid URL"));
@@ -100,13 +101,13 @@ int main(int argc, char **argv)
             result.insert(QStringLiteral("ok"), true);
         }
     } else if (args.size() == 3 && args.at(1) == QStringLiteral("remove")) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
         if (index.isValid() && !model.isDevice(index)) {
             model.removePlace(index);
         }
         result.insert(QStringLiteral("ok"), true);
     } else if (args.size() == 3 && (args.at(1) == QStringLiteral("teardown") || args.at(1) == QStringLiteral("eject"))) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
         if (!index.isValid() || !model.isDevice(index)) {
             result.insert(QStringLiteral("ok"), false);
             result.insert(QStringLiteral("error"), QStringLiteral("device is unavailable"));
@@ -131,7 +132,7 @@ int main(int argc, char **argv)
             return app.exec();
         }
     } else if (args.size() == 4 && args.at(1) == QStringLiteral("rename")) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
         if (!index.isValid() || model.isDevice(index)) {
             result.insert(QStringLiteral("ok"), false);
             result.insert(QStringLiteral("error"), QStringLiteral("place cannot be renamed"));
@@ -140,8 +141,8 @@ int main(int argc, char **argv)
             result.insert(QStringLiteral("ok"), true);
         }
     } else if (args.size() == 4 && args.at(1) == QStringLiteral("relocate")) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
-        const QUrl destination = QUrl::fromUserInput(args.at(3));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
+        const QUrl destination = mirivueLocationUrl(args.at(3));
         if (!index.isValid() || model.isDevice(index) || !destination.isValid()) {
             result.insert(QStringLiteral("ok"), false);
             result.insert(QStringLiteral("error"), QStringLiteral("place cannot be relocated"));
@@ -158,7 +159,7 @@ int main(int argc, char **argv)
             int targetRow = 0;
             QJsonArray moves;
             for (const QJsonValue &value : order.array()) {
-                const QModelIndex index = findUrl(model, QUrl::fromUserInput(value.toString()));
+                const QModelIndex index = findUrl(model, mirivueLocationUrl(value.toString()));
                 if (index.isValid() && model.groupType(index) == KFilePlacesModel::PlacesType && index.row() != targetRow) {
                     const QModelIndexList selected{index};
                     std::unique_ptr<QMimeData> mime(model.mimeData(selected));
@@ -172,7 +173,7 @@ int main(int argc, char **argv)
             result.insert(QStringLiteral("moves"), moves);
         }
     } else if (args.size() == 4 && args.at(1) == QStringLiteral("place-hidden")) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
         if (!index.isValid()) {
             result.insert(QStringLiteral("ok"), false);
             result.insert(QStringLiteral("error"), QStringLiteral("place is unavailable"));
@@ -192,7 +193,7 @@ int main(int argc, char **argv)
             result.insert(QStringLiteral("ok"), true);
         }
     } else if (args.size() == 3 && args.at(1) == QStringLiteral("setup")) {
-        const QModelIndex index = findUrl(model, QUrl::fromUserInput(args.at(2)));
+        const QModelIndex index = findUrl(model, mirivueLocationUrl(args.at(2)));
         if (!index.isValid() || !model.setupNeeded(index)) {
             result.insert(QStringLiteral("ok"), index.isValid());
         } else {

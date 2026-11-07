@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal, QUrl
 from .platform_services import services
 from .file_visibility import kio_is_hidden
+from .metadata import entry_stat
 
 
 def local_entries(folder, cancelled=lambda: False):
@@ -26,7 +27,7 @@ def directory_snapshot(folder, cancelled=lambda: False):
     try:
         for path, is_dir, hidden in local_entries(folder, cancelled):
             try:
-                info = path.stat()
+                info = entry_stat(path)       # keeps dangling symlinks visible
                 result[path] = (is_dir, info.st_mtime_ns, info.st_size, hidden)
             except OSError:
                 continue

@@ -197,6 +197,9 @@ class KioRemoteSearchWorker(RecursiveSearchWorker):
 def listed_media_entry(path, cancelled=lambda: False, *, hidden=None):
     """Use validated cache data and repair only legacy missing durations."""
     from .media import AUDIO_EXT, IMAGE_EXT, cached_media, expected_kind
+    from .metadata import is_dangling_symlink
+    if is_dangling_symlink(path):
+        return basic_entry(path, hidden=hidden)   # nothing to read behind the link
     suffix = path.suffix.lower()
     if suffix in EXTENSIONS:
         from .metadata import cached_video

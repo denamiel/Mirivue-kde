@@ -67,7 +67,7 @@ restent fournis par KDE/la distribution, sans copie de leurs exécutables.
 
 ## Code natif original sous MIT
 
-Les vingt fichiers suivants portent un en-tête MIT ; les sources Dolphin ne
+Les vingt et un fichiers suivants portent un en-tête MIT ; les sources Dolphin ne
 sont pas incluses dans cette liste.
 
 - `native/desktop-dialogs.cpp`
@@ -82,6 +82,7 @@ sont pas incluses dans cette liste.
 - `native/kio-preview.cpp`
 - `native/kio-service.cpp`
 - `native/kio-transfer.cpp`
+- `native/location-url.h`
 - `native/open-with-menu.cpp`
 - `native/path-navigator.cpp`
 - `native/path-navigator.h`

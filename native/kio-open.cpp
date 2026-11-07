@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "location-url.h"
 #include <QApplication>
 #include <QFileInfo>
 #include <QUrl>
@@ -20,8 +21,7 @@ int main(int argc, char **argv)
     }
 
     const QString argument = QString::fromLocal8Bit(argv[terminal ? 2 : 1]);
-    const QUrl url = QFileInfo(argument).isAbsolute()
-        ? QUrl::fromLocalFile(argument) : QUrl::fromUserInput(argument);
+    const QUrl url = mirivueLocationUrl(argument);
     if (!url.isValid()) {
         qCritical("invalid URL");
         return 2;
