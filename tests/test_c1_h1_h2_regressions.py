@@ -6,7 +6,9 @@ C1  A name ending with Unicode whitespace was trimmed by QUrl::fromUserInput()
 H1  Sources dropped on Trash, or sent to a URI destination, were resolved with
     Path.resolve(): the symlink target was trashed or copied instead of the link.
 H2  Deleting a non-local KIO row (sftp, smb, trash, desktop...) raised
-    AttributeError before any KIO request.
+    AttributeError before any KIO request.  Like Dolphin, Move to Trash is
+    only offered for items with a local path; it never becomes a deletion.
+C1  The same trimming affected the breadcrumb, Places captions and bookmarks.
 
 The real window methods and the real native KIO service are used, with only the
 selection and job bookkeeping replaced by a small harness.  Every operation runs
@@ -58,6 +60,8 @@ class Harness:
     drop_choices = TransferMixin.drop_choices
     transfers_locked = BackgroundTransfers.transfers_locked
     pending_transfers = BackgroundTransfers.pending_transfers
+    selection_supports_trash = staticmethod(mirivue_app.Window.selection_supports_trash)
+    add_place = mirivue_app.Window.add_place
 
     def __init__(self, rows=(), folder='', record_only=False):
         self.rows = list(rows)
@@ -73,6 +77,8 @@ class Harness:
         self.delete_button = QAction()
         self.permanent_delete_action = QAction()
         self.bound_pane = types.SimpleNamespace(_closed=False)
+        self.messages = []
+        self.deadline = TRANSFER_DEADLINE
 
     def is_archive_view(self): return False
     def selected_indexes(self): return list(range(len(self.rows)))
@@ -80,6 +86,7 @@ class Harness:
     def paths_locked(self, _paths): return False
     def reload_places(self): pass
     def update_renamed_rows(self, *_args, **_kwargs): pass
+    def show_activity_message(self, message, *_args): self.messages.append(message)
 
     def start_kio_transfer(self, sources, destination, move=False, clipboard_guard=None,
                            operation=None, on_success=None, before_refresh=None):
@@ -89,7 +96,7 @@ class Harness:
         if self.record_only:
             request['ok'], request['error'] = None, 'recorded only'
         else:
-            deadline = time.monotonic() + TRANSFER_DEADLINE
+            deadline = time.monotonic() + self.deadline
             request['ok'], request['error'] = services.transfer_kio(
                 list(sources), str(destination), move, None,
                 lambda: time.monotonic() > deadline, operation=operation)
@@ -363,11 +370,31 @@ class TestH2RemoteRowsCanBeDeleted(IsolatedKioTestCase):
         harness.delete_selected(mode)                 # must not raise AttributeError
         return harness
 
-    def test_trash_sftp_row_sends_the_unchanged_url(self):
-        uri = 'sftp://example.invalid/share/file.txt'
-        harness = self.remote(uri, 'sftp://example.invalid/share')
+    def test_trash_of_sftp_row_is_refused_without_any_request(self):
+        # KIO::trash() rejects remote URLs; like Dolphin, Move to Trash is
+        # unavailable and is never turned into a permanent deletion.
+        harness = self.remote('sftp://example.invalid/share/file.txt', 'sftp://example.invalid/share')
+        self.assertFalse(harness.delete_button.isEnabled())
+        self.assertTrue(harness.permanent_delete_action.isEnabled())
+        self.assertEqual(harness.requests, [])
+        self.assertEqual(len(harness.messages), 1)
+
+    def test_trash_of_kio_row_with_local_path_sends_the_unchanged_url(self):
+        uri = 'desktop:/file.txt'
+        row = remote_entry(uri, 'file.txt', local_path=str(self.directory / 'file.txt'))
+        harness = Harness([row], 'desktop:/', record_only=True)
+        harness.refresh_delete_availability()
         self.assertTrue(harness.delete_button.isEnabled())
+        harness.delete_selected('trash')
         self.assertEqual([(r['sources'], r['operation']) for r in harness.requests], [([uri], 'trash')])
+
+    def test_trash_support_follows_local_paths(self):
+        supports = mirivue_app.Window.selection_supports_trash
+        self.assertTrue(supports([types.SimpleNamespace(path=self.directory / 'a')]))
+        self.assertTrue(supports([remote_entry('desktop:/a', 'a', local_path='/tmp/a')]))
+        self.assertFalse(supports([remote_entry('smb://example.invalid/s/a', 'a')]))
+        self.assertFalse(supports([types.SimpleNamespace(path=self.directory / 'a'),
+                                   remote_entry('sftp://example.invalid/a', 'a')]))
 
     def test_permanent_deletion_of_smb_row_sends_the_unchanged_url(self):
         uri = 'smb://example.invalid/share/file.txt'
@@ -399,6 +426,133 @@ class TestH2RemoteRowsCanBeDeleted(IsolatedKioTestCase):
         self.assertEqual(harness.requests[-1]['operation'], 'delete')
         self.assertFalse(trashed.exists())
         self.assertFalse((self.trash / 'info' / (name + '.trashinfo')).exists())
+
+
+class TestPlacesAndNavigationKeepTrailingSpaces(IsolatedKioTestCase):
+    """Absolute folder paths reach the Places and breadcrumb widgets untrimmed."""
+
+    def setUp(self):
+        super().setUp()
+        (self.directory / 'Folder').mkdir()
+        (self.directory / 'Folder ').mkdir()
+        self.places_file = Path(os.environ['XDG_DATA_HOME']) / 'user-places.xbel'
+        self.places_file.write_text('<xbel><bookmark href="' + (self.directory / 'Folder').as_uri() + '">'
+                                    '<title>Bookmark without space</title></bookmark></xbel>')
+        self.addCleanup(self.places_file.unlink, missing_ok=True)
+
+    def test_places_identity_and_breadcrumb_use_the_folder_with_trailing_space(self):
+        import json
+        import subprocess
+        import sys
+        library = services.tool_path('libmirivue-kio-places-widget.so')
+        if not library:
+            self.skipTest('Compiled libmirivue-kio-places-widget.so required')
+        script = """import ctypes, json, sys
+import shiboken6
+from PySide6.QtWidgets import QApplication, QWidget, QAbstractButton, QVBoxLayout
+app = QApplication(['Mirivue-navigation-test'])
+library = ctypes.CDLL(sys.argv[1]); location = sys.argv[2].encode()
+parent = QWidget()
+parent.resize(1600, 80)
+library.mirivue_places_create.argtypes = [ctypes.c_void_p] * 10 + [ctypes.c_char_p]
+library.mirivue_places_create.restype = ctypes.c_void_p
+places = library.mirivue_places_create(shiboken6.getCppPointer(parent)[0], *([None] * 9), b'Split')
+library.mirivue_places_location_identity.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+library.mirivue_places_location_identity.restype = ctypes.c_char_p
+callback = ctypes.CFUNCTYPE(None, ctypes.c_char_p)
+callbacks = [callback(lambda raw: None) for _ in range(6)]
+library.mirivue_navigator_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p] + [callback] * 6
+library.mirivue_navigator_create.restype = ctypes.c_void_p
+navigator = library.mirivue_navigator_create(shiboken6.getCppPointer(parent)[0], places, b'/', *callbacks)
+widget = shiboken6.wrapInstance(navigator, QWidget)
+QVBoxLayout(parent).addWidget(widget)
+library.mirivue_navigator_set_url.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+library.mirivue_navigator_set_url(navigator, location)
+parent.show()                   # breadcrumb buttons exist once laid out
+for _ in range(10):
+    app.processEvents()
+buttons = []
+for button in widget.findChildren(QAbstractButton):
+    try:
+        if button.metaObject().className() == 'KDEPrivate::KUrlNavigatorButton' and button.isVisible():
+            buttons.append(button.text())
+    except RuntimeError:        # breadcrumb buttons are rebuilt asynchronously
+        pass
+print(json.dumps({'identity': json.loads(library.mirivue_places_location_identity(places, location)),
+                  'last_button': buttons[-1] if buttons else None}))
+"""
+        result = subprocess.run([sys.executable, '-B', '-c', script, library, str(self.directory / 'Folder ')],
+                                capture_output=True, text=True, timeout=TRANSFER_DEADLINE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(observed['identity']['name'], 'Folder ')
+        self.assertEqual(observed['last_button'], 'Folder ')
+
+    def test_add_place_keeps_the_trailing_space(self):
+        harness = Harness([], str(self.directory))
+        harness.reload_places = lambda: None
+        with patch.object(services, 'change_place', return_value=(True, '')) as change_place:
+            self.assertTrue(harness.add_place(self.directory / 'Folder '))
+        operation, _label, url, _icon = change_place.call_args.args
+        self.assertEqual(operation, 'add')
+        self.assertEqual(QUrl(url).toLocalFile(), str(self.directory / 'Folder '))
+
+    def test_places_helper_adds_the_folder_with_trailing_space(self):
+        import json
+        import subprocess
+        helper = services.tool_path('mirivue-kio-places')
+        if not helper:
+            self.skipTest('Compiled mirivue-kio-places required')
+        target = self.directory / 'Folder '
+        added = subprocess.run([helper, 'add', 'With space', str(target), 'folder'],
+                               capture_output=True, text=True, timeout=TRANSFER_DEADLINE)
+        self.assertEqual(added.returncode, 0, added.stdout + added.stderr)
+        listed = subprocess.run([helper, 'list'], capture_output=True, text=True, timeout=TRANSFER_DEADLINE)
+        places = {QUrl(place['url']).toLocalFile(): place for place in json.loads(listed.stdout)['places']
+                  if QUrl(place['url']).isLocalFile()}
+        self.assertIn(str(target), places)
+        self.assertEqual(places[str(self.directory / 'Folder')]['name'], 'Bookmark without space')
+
+    def test_inventory_of_absolute_path_with_trailing_space(self):
+        import json
+        import subprocess
+        tool = services.tool_path('mirivue-kio-list')
+        write(self.directory / 'Folder ' / 'expected.txt', '1')
+        write(self.directory / 'Folder' / 'intruder.txt', '2')
+        result = subprocess.run([tool, str(self.directory / 'Folder ')], capture_output=True, text=True,
+                                timeout=TRANSFER_DEADLINE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = sorted(entry['name'] for entry in json.loads(result.stdout.splitlines()[-1])['entries'])
+        self.assertEqual(names, ['expected.txt'])
+
+
+class TestKdeConfirmationsAreRespected(IsolatedKioTestCase):
+    """With KDE confirmations enabled, nothing is removed without an answer."""
+
+    def confirmations(self, trash, delete):
+        kiorc = Path(os.environ['XDG_CONFIG_HOME']) / 'kiorc'
+        previous = kiorc.read_text()
+        services.shutdown_kio_service()
+        kiorc.write_text(f'[Confirmations]\nConfirmTrash={str(trash).lower()}\nConfirmDelete={str(delete).lower()}\n')
+        self.addCleanup(services.shutdown_kio_service)
+        self.addCleanup(kiorc.write_text, previous)
+
+    def unanswered(self, mode):
+        target = write(self.directory / 'keep.txt', 'KEEP')
+        harness = Harness([local_row(target)], str(self.directory))
+        harness.deadline = 4          # nobody answers the native dialog
+        harness.delete_selected(mode)
+        self.assertFalse(harness.requests[-1]['ok'], harness.requests[-1])
+        self.assertEqual(state(target), 'KEEP')
+        self.assertEqual(self.trashed(), [])
+
+    def test_unanswered_permanent_deletion_keeps_the_file(self):
+        self.confirmations(trash=False, delete=True)
+        self.unanswered('permanent')
+
+    def test_unanswered_trash_confirmation_keeps_the_file(self):
+        self.confirmations(trash=True, delete=True)
+        self.unanswered('trash')
 
 
 class TestNativeHelpersRejectIncompleteUrls(IsolatedKioTestCase):
@@ -438,6 +592,15 @@ class TestNativeHelpersRejectIncompleteUrls(IsolatedKioTestCase):
         ok, _error = self.request('mkdir', destination=str(self.directory / 'new'))
         self.assertFalse(ok)
         self.assertFalse((self.directory / 'new').exists())
+
+    def test_service_error_is_a_complete_message(self):
+        missing = self.directory / 'missing.txt'
+        (self.directory / 'destination').mkdir()
+        ok, error = self.request('copy', [missing.as_uri()], (self.directory / 'destination').as_uri())
+        self.assertFalse(ok)
+        self.assertIn(str(missing), error)
+        self.assertNotEqual(error.strip(), str(missing), 'a bare path is not an explicit error')
+        self.assertNotEqual(error.strip(), missing.as_uri(), 'a bare URL is not an explicit error')
 
     def test_fallback_helper_rejects_bare_paths(self):
         import json

@@ -4,6 +4,7 @@
 // Location captions adapt Dolphin v26.08.2 DolphinViewContainer::caption().
 // Original: src/dolphinviewcontainer.cpp, KDE/system/dolphin.
 // Earlier original Mirivue portions remain available under their MIT grant.
+#include "location-url.h"
 #include <QApplication>
 #include <QAction>
 #include <QDropEvent>
@@ -243,7 +244,7 @@ const char *mirivue_places_location_identity(void *pointer, const char *location
     if (!pointer || !location) return nullptr;
     auto *view = static_cast<KFilePlacesView *>(pointer);
     auto *model = static_cast<KFilePlacesModel *>(view->model());
-    const QUrl url = QUrl::fromUserInput(QString::fromUtf8(location));
+    const QUrl url = mirivueLocationUrl(QString::fromUtf8(location));
     QString caption;
     if (url.path().isEmpty() || url.path() == QLatin1String("/"))
         caption = QUrlQuery(url).queryItemValue(QStringLiteral("title"), QUrl::FullyDecoded);
@@ -420,7 +421,7 @@ void mirivue_places_set_url(void *pointer, const char *url)
     if (!pointer || !url) {
         return;
     }
-    static_cast<KFilePlacesView *>(pointer)->setUrl(QUrl::fromUserInput(QString::fromUtf8(url)));
+    static_cast<KFilePlacesView *>(pointer)->setUrl(mirivueLocationUrl(QString::fromUtf8(url)));
 }
 
 void *mirivue_navigator_create(void *parent, void *places, const char *initial,
@@ -433,7 +434,7 @@ void *mirivue_navigator_create(void *parent, void *places, const char *initial,
     }
     auto *placesView = static_cast<KFilePlacesView *>(places);
     auto *model = static_cast<KFilePlacesModel *>(placesView->model());
-    auto *navigator = createPathNavigator(model, QUrl::fromUserInput(QString::fromUtf8(initial ? initial : "")),
+    auto *navigator = createPathNavigator(model, mirivueLocationUrl(QString::fromUtf8(initial ? initial : "")),
                                           static_cast<QWidget *>(parent));
     const auto relay = [navigator](PlaceCallback callback, const QUrl &url) {
         if (callback) {
@@ -482,7 +483,7 @@ void mirivue_navigator_set_url(void *pointer, const char *url)
     if (pointer && url) {
         auto *navigator = static_cast<KUrlNavigator *>(pointer);
         const QSignalBlocker block(navigator);
-        const QUrl next = QUrl::fromUserInput(QString::fromUtf8(url));
+        const QUrl next = mirivueLocationUrl(QString::fromUtf8(url));
         if (navigator->locationUrl() != next) {
             navigator->setLocationUrl(next);
         }

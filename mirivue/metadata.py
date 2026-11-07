@@ -348,6 +348,8 @@ def remote_entry(uri, name, is_dir=False, size=0, modified=0, mime='', accessed=
     parsed = urlparse(str(uri))
     path = Path(uri) if parsed.scheme.casefold() in ARCHIVE_PROTOCOLS else uri
     row = Video(path, is_dir=is_dir, is_video=False, media_type=tr('folder') if is_dir else tr('other'), is_hidden=hidden, real_name=real_name)
+    # KIO's UDS_LOCAL_PATH: Trash accepts the item only when it has one.
+    row.local_path = str(local_path or '')
     size_value = None if is_dir else int(size or 0)
     row.values = [name, quantity(size_value, [tr('o'), tr('Kio'), tr('Mio'), tr('Gio'), tr('Tio')], 1024)] + [''] * 8 + [tr('Dossier') if is_dir else mime or tr('Autre fichier'), '', '', '', '']
     row.sort_values = [name.casefold(), size_value or 0, -1, -1, '', -1, -1, '', '', -1, row.values[10], '', -1, -1, -1]

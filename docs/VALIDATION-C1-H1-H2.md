@@ -34,7 +34,7 @@ cette branche.
     Maj+Suppr utilise la suppression définitive de la Corbeille ;
   - comme dans Dolphin, « Mettre à la corbeille » est désactivé dans la vue
     Corbeille, avec une explication ; « Supprimer définitivement » reste actif.
-- `tests/test_c1_h1_h2_regressions.py` : 32 tests (21 scénarios d’origine,
+- `tests/test_c1_h1_h2_regressions.py` : 32 tests au premier tour (21 scénarios d’origine,
   refus des URL incomplètes, opérations sur les liens symboliques) ;
   `tests/test_delete_action_state.py` : états des deux actions de suppression.
 - `.github/workflows/fedora-package.yml` : ces deux suites rejoignent les
@@ -53,7 +53,7 @@ Python 3.15, `QT_QPA_PLATFORM=offscreen`, bus D-Bus privé.
 
 - Compilation Release de toutes les cibles natives (`-Wall -Wextra`) : réussie ;
   seuls deux avertissements préexistants dans `native/dolphin-view.cpp`.
-- Nouvelle suite : **32/32 réussis** sur la branche. Sur le code et les
+- Premier tour — nouvelle suite : **32/32 réussis** sur la branche. Sur le code et les
   assistants beta.5 d’origine, 26 échouent ; les 6 réussis sont les témoins et
   contrôles de non-régression attendus.
 - Non-régression, branche comparée au code d’origine dans les mêmes conditions :
@@ -78,22 +78,91 @@ en conteneur) ; `test_native_file_management_gui` et `test_native_clipboard_gui`
 cours » ouverte par `rename_f2` lorsque le renommage KIO asynchrone du
 sous-test précédent n’est pas terminé.
 
+## Second tour, après la revue indépendante
+
+### Constats démontrés
+
+- **Corbeille sur sftp/smb.** Sur un vrai serveur SFTP (privé, `127.0.0.1`),
+  `KIO::trash()` échoue avec `ERR_ACCESS_DENIED` (« Accès refusé à
+  trash:/… »), et non `ERR_TRASH_NOT_AVAILABLE`. `DeleteOrTrashJob` affiche donc
+  une erreur sans jamais supprimer : il ne bascule vers une suppression que pour
+  `ERR_TRASH_NOT_AVAILABLE` ou `ERR_TRASH_FILE_TOO_LARGE`, et toujours avec
+  `ForceConfirmation`. L’action restait néanmoins proposée alors qu’elle échoue
+  toujours ; Dolphin la désactive (`isLocal() && supportsMoving()`).
+- **Navigation et Emplacements.** Avec un favori sur « Dossier » et un dossier
+  « Dossier␠ », le titre d’emplacement et le dernier bouton du fil d’Ariane
+  désignaient le favori « Dossier ». `add_place` créait le favori sans l’espace.
+- **Messages d’erreur.** Pour une copie, un déplacement ou un lien en échec, le
+  service renvoyait `errorText()` : souvent une URL seule, sans explication.
+
+### Corrections
+
+- `native/location-url.h` : `mirivueLocationUrl()`. Un chemin absolu passe par
+  `fromLocalFile`, une URL complète est analysée exactement, `fromUserInput`
+  reste réservé à une saisie libre. Utilisé par `kio-places-widget.cpp` (titre,
+  Emplacements, fil d’Ariane), `kio-places.cpp`, `kio-list.cpp` et `kio-open.cpp`.
+- `mirivue/app.py` : `add_place` n’appelle plus `fromUserInput` ;
+  `selection_supports_trash()` reprend la règle de Dolphin, à partir du
+  `UDS_LOCAL_PATH` conservé dans les lignes KIO (`metadata.remote_entry`).
+  Pour une sélection non locale, « Mettre à la corbeille » est grisé avec une
+  explication, le menu contextuel ne propose que « Supprimer définitivement… »,
+  et Suppr n’envoie aucune requête.
+- `native/kio-service.cpp` : le message complet `errorString()` est transmis
+  lorsqu’une erreur a un texte ; une erreur sans texte reste vide, comme le
+  suppose la reconnaissance des conflits annulés.
+
+**Différence volontaire avec Dolphin.** Dans un dossier distant, Dolphin associe
+Suppr à la suppression définitive ; si l’utilisateur a désactivé la
+confirmation de suppression, Suppr y efface donc sans question. Mirivue
+n’envoie rien sur Suppr et réserve la suppression définitive à Maj+Suppr ou au
+menu, conformément à l’exigence : « Mettre à la corbeille » ne devient jamais
+une suppression.
+
+### Expériences SFTP réelles
+
+Serveur `sshd` non privilégié sur `127.0.0.1`, clés jetables ; client KIO dans
+un espace de noms utilisateur et de montage où `$HOME/.ssh` est un `tmpfs` de
+test : la configuration SSH de la session n’est ni lue ni modifiée.
+
+| Essai | Résultat avec la branche |
+|---|---|
+| Corbeille sur un fichier sftp | aucune requête KIO, message explicite, fichier conservé |
+| Suppression définitive, confirmation désactivée | fichier supprimé |
+| Suppression définitive, confirmation active, sans réponse | fichier conservé |
+| « photo␠ » et « photo » distants, suppression de « photo␠ » | seul « photo␠ » est supprimé |
+| Suppression d’un lien distant | le lien seul est supprimé, la cible reste |
+| Copie d’un lien local vers sftp | KIO crée un fichier ordinaire portant le nom du lien (comportement de KIO) |
+| « Créer un lien ici » vers sftp | refusé par KIO, sans rien créer |
+
+### Tests et résultats
+
+- Suite `test_c1_h1_h2_regressions.py` : 41 tests, dont 9 ajoutés au second
+  tour (corbeille non locale, titre et fil d’Ariane, `add_place`, favori de
+  bout en bout, `kio-list` sur un chemin absolu, confirmations KDE actives sans
+  réponse, message d’erreur complet). **41/41** sur la branche, trois exécutions.
+  Les nouveaux tests d’anomalie échouent sur la beta.5 et sur `65af341` ; les
+  tests de confirmation réussissent partout, comme garde-fous.
+- `test_delete_action_state.py` : 5/5.
+- Non-régression après ce tour, mêmes conditions que la référence : 100 suites,
+  **aucune différence** avec le code d’origine ; les deux suites dépendant de la
+  langue réussissent en `LANG=C.UTF-8`.
+
 ## Limites
 
 - Aucune session Plasma réelle : rendu, focus, glisser-déposer à la souris et
   dialogues de confirmation KDE ne sont pas observés.
 - Les confirmations KIO sont désactivées dans les essais automatisés.
-- sftp et smb ne sont pas essayés contre de vrais serveurs ; la mise à la
-  corbeille distante reste décidée par KIO (`KIO::trash` ne gère que les
-  fichiers locaux).
+- SFTP est vérifié sur un serveur local réel ; SMB ne l’est pas (même chemin
+  KIO, à confirmer sur un partage de test).
 - 31 suites graphiques et les tests natifs C++ (`native/tests`) n’ont pas été
   exécutés.
 
 ## Risques résiduels
 
-- La navigation et les Emplacements utilisent encore `fromUserInput()`
-  (`kio-places-widget.cpp`, `kio-places.cpp`, `add_place`) : un fil d’Ariane
-  ou un favori sur « Dossier␠ » peut viser « Dossier », sans modifier de fichier.
+- Annuler une opération pendant qu’un dialogue de confirmation KDE est ouvert
+  laisse le service sans réponse ; Mirivue le redémarre après 5 s, ce qui
+  efface l’historique d’annulation KIO de la session (comportement antérieur).
+- Copier un lien vers sftp crée un fichier ordinaire : KIO déréférence le lien.
 - Copier ou déplacer un lien vers une URI transmet désormais le lien, comme
   Dolphin ; une destination sans liens symboliques peut produire une erreur KIO.
 - `Location.uri` résout toujours les liens pour les propriétés natives et la
@@ -103,8 +172,6 @@ sous-test précédent n’est pas terminé.
 
 ## Validation manuelle restant à faire
 
-Dans une session Plasma réelle, confirmations KDE actives, dans un dossier de
-test : Suppr et Maj+Suppr sur « x␠ » et « x » ; F2 sur « x␠ » ; glisser un lien
-vers un panneau affichant la Corbeille ; Suppr et Maj+Suppr dans un partage
-sftp ou smb de test ; vérifier dans la Corbeille que « Mettre à la corbeille »
-est grisé et que « Supprimer définitivement » reste disponible.
+Procédure complète, avec fichiers d’essai isolés :
+`docs/VALIDATION-MANUELLE-C1-H1-H2.md` et
+`tests/manual/preparer-essais-c1-h1-h2.sh`.
