@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publier_copr:
+        description: 'Pour publier dans COPR le commit main testé, taper exactement PUBLIER'
+        required: false
+        default: ''
   schedule:
     - cron: '23 5 * * 1'
 permissions:
@@ -27,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -60,7 +65,7 @@ jobs:
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
       - name: Signaler une incompatibilité de développement
@@ -101,9 +106,15 @@ jobs:
 
   publish:
     name: Publier dans COPR après les contrôles obligatoires
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Publication uniquement sur demande explicite : lancement manuel sur main,
+    # confirmation tapée, puis approbation dans l'environnement protégé.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main'
+      && inputs.publier_copr == 'PUBLIER'
     needs: [rpm, python]
     runs-on: ubuntu-latest
+    environment: publication-copr
     permissions:
       contents: write
     concurrency:
@@ -124,4 +135,8 @@ jobs:
             exit 0
           fi
           git merge-base --is-ancestor origin/publication "$TESTED_COMMIT"
+          # Refuse an equal or lower RPM Epoch:Version-Release (rpmvercmp).
+          git show origin/publication:packaging/fedora/mirivue-kde.spec > "$RUNNER_TEMP/publie.spec"
+          git show "$TESTED_COMMIT:packaging/fedora/mirivue-kde.spec" > "$RUNNER_TEMP/candidat.spec"
+          python3 packaging/fedora/verifier-revision-publication.py "$RUNNER_TEMP/publie.spec" "$RUNNER_TEMP/candidat.spec"
           git push origin "$TESTED_COMMIT:refs/heads/publication"

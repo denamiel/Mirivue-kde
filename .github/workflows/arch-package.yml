@@ -4,8 +4,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  release:
-    types: [published]
+    inputs:
+      publier_arch:
+        description: 'Pour joindre les paquets Arch à une release, taper exactement PUBLIER'
+        required: false
+        default: ''
+      tag:
+        description: 'Tag de la release existante, qui doit désigner le commit main construit'
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -37,19 +44,41 @@ jobs:
           path: dist/*
           if-no-files-found: error
   publish:
-    if: github.event_name == 'release'
+    # Jamais déclenché par une release, un tag, un push ou une fusion :
+    # lancement manuel sur main, saisie PUBLIER, tag explicite, approbation.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main'
+      && inputs.publier_arch == 'PUBLIER'
+      && inputs.tag != ''
     needs: build
     runs-on: ubuntu-latest
+    environment: publication-arch
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: mirivue-kde-arch-x86_64
           path: dist
-      - name: Joindre le paquet à la publication
+      - name: Joindre les paquets à la release désignée, sans rien écraser
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" dist/* --clobber
+          RELEASE_TAG: ${{ inputs.tag }}
+          TESTED_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch --tags origin
+          tag_commit="$(git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG^{commit}")" \
+            || { echo "Tag introuvable : $RELEASE_TAG" >&2; exit 1; }
+          if [ "$tag_commit" != "$TESTED_COMMIT" ]; then
+            echo "Le tag $RELEASE_TAG désigne $tag_commit, pas le commit construit $TESTED_COMMIT." >&2
+            exit 1
+          fi
+          gh release view "$RELEASE_TAG" >/dev/null
+          # No overwrite option: an asset already attached makes the upload fail.
+          gh release upload "$RELEASE_TAG" dist/*
