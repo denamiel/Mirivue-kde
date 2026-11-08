@@ -1,3 +1,12 @@
+# 1.0.0-beta.6 — 8 novembre 2026
+
+- KIO agit exactement sur l’élément sélectionné : les URL complètes ne passent plus par `QUrl::fromUserInput()`, qui retirait les espaces finaux (« photo␠ » traité comme « photo »), y compris dans le fil d’Ariane, les Emplacements et les favoris.
+- Une requête contenant une source qui n’est pas une URL complète est refusée en entier, jamais réduite en silence.
+- Les opérations sur un lien symbolique visent le lien, jamais sa cible (corbeille, copie, déplacement, création de lien).
+- Suppression dans les emplacements distants rétablie ; « Mettre à la corbeille » n’est proposé que pour les éléments ayant un chemin local, comme Dolphin, et n’est jamais transformé en suppression. Dans la Corbeille, seule la suppression définitive est proposée.
+- Les liens symboliques cassés sont affichés comme dans Dolphin, au premier inventaire, après F5 et lors du suivi des dossiers.
+- Messages d’erreur KIO complets ; suite de régression permanente (49 tests) et procédure de validation manuelle Plasma.
+
 # 1.0.0-beta.5 — 5 novembre 2026
 
 - Propriétés et permissions confiées à KPropertiesDialog ; retrait du dialogue et du chmod spécifiques à Mirivue.
