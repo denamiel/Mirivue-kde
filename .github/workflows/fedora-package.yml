@@ -32,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
