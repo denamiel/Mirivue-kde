@@ -129,6 +129,79 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  testlab-wayland:
+    name: TestLab Wayland — KWin virtuel (Fedora 45)
+    # Native Wayland: the installed RPM in a disposable kwin_wayland --virtual
+    # without Xwayland, driven by KWin fake input. KWin 6.8 needs a DRM render
+    # node: vgem provides one on the runner without any GPU. Not yet required
+    # for publication or merge (see docs/TESTLAB-WAYLAND.md); never Plasma.
+    needs: rpm
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Nœud de rendu virtuel (vgem)
+        run: |
+          # Ephemeral GitHub-hosted runner only: vgem is a GPU-less render node.
+          sudo modprobe vgem
+          node=$(ls /dev/dri/renderD* | head -n 1)
+          echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
+          # Outside the workspace: actions/checkout cleans it.
+          stat -c 'hôte : %n %a %U:%G' "$node" | tee "$RUNNER_TEMP/host-node-before.txt"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Tests et scénarios Wayland dans un conteneur Fedora 45 jetable (3 passes)
+        run: |
+          mkdir -p testlab-wayland-artefacts
+          # Only the render node is passed. Docker creates the container's own
+          # node in its private /dev; changing it never touches the host node.
+          docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
+            -v "$PWD:/src:ro" -v "$PWD/testlab-wayland-artefacts:/artefacts" \
+            -e GITHUB_STEP_SUMMARY=/artefacts/resume.md fedora:45 bash -euo pipefail -c '
+            dnf -y -q install python3 kwin wl-clipboard dbus-daemon dbus-tools systemd shadow-utils >/dev/null
+            dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
+            useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-testlab
+            # A group whose only member is the test account owns the render node: 0660, never 0666.
+            groupadd --system testlab-rendu
+            usermod -aG testlab-rendu mirivue-testlab
+            chgrp testlab-rendu /dev/dri/renderD128
+            chmod 0660 /dev/dri/renderD128
+            stat -c "conteneur : %n %a %U:%G" /dev/dri/renderD128
+            cp -a /src /w && cd /w
+            export MIRIVUE_TESTLAB_USER=mirivue-testlab MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1 MIRIVUE_TESTLAB_REQUIRE_WAYLAND=1
+            timeout 600 python3 -m unittest discover -s tests -p test_testlab_wayland.py -v
+            mkdir -p "$HOME/.config"
+            status=0
+            for scenario in wayland-essentiel wayland-glisser-deposer; do
+              for pass in 1 2 3; do
+                timeout 300 python3 tests/testlab/run.py "$scenario" --artefacts "/artefacts/$scenario-$pass" \
+                  --surveiller "$HOME" || status=1
+              done
+            done
+            exit $status'
+      - name: Le nœud de rendu de l’hôte est inchangé
+        if: always()
+        run: |
+          stat -c 'hôte : %n %a %U:%G' "$RENDER_NODE" > "$RUNNER_TEMP/host-node-after.txt"
+          cat "$RUNNER_TEMP/host-node-before.txt" "$RUNNER_TEMP/host-node-after.txt"
+          cmp "$RUNNER_TEMP/host-node-before.txt" "$RUNNER_TEMP/host-node-after.txt"
+      - name: Résumé TestLab Wayland
+        if: always()
+        run: cat testlab-wayland-artefacts/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testlab-wayland-fedora-45
+          path: testlab-wayland-artefacts
+          if-no-files-found: warn
+          retention-days: 14
+
   python:
     name: Python ${{ matrix.python }} — imports et fichiers
     runs-on: ubuntu-latest

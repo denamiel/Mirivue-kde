@@ -334,6 +334,8 @@ class Lab:
         self.deadline = None
         self.display = None
         self.report = None
+        # A scenario may mark an extra area as covered once it has passed.
+        self.coverage = dict(self.COVERAGE)
 
     # ----------------------------------------------------------------- paths
     @property
@@ -488,15 +490,19 @@ class Lab:
         }
         self.environment.update(self.extra_environment)
         self._own(self.root)
+        self._start_services()
+
+    def _start_services(self):
+        """X11: the display first, then the session bus."""
         if self.use_display:
             self._start_display()
         self._start_bus()
 
-    def _service(self, name, command, *, pass_fds=(), stdout=None, as_test_account=False):
+    def _service(self, name, command, *, pass_fds=(), stdout=None, as_test_account=False, environment=None):
         log = open(self.log_path(name), 'ab')
         options = self._process_options() if as_test_account else {}
         process = subprocess.Popen(
-            command, env=self.environment, cwd=self.root, stdin=subprocess.DEVNULL,
+            command, env=environment or self.environment, cwd=self.root, stdin=subprocess.DEVNULL,
             stdout=stdout if stdout is not None else log, stderr=log,
             pass_fds=pass_fds, start_new_session=True, **options)
         log.close()
@@ -911,7 +917,7 @@ class Lab:
                 'confinement_description': CONFINEMENT_DESCRIPTIONS.get(self.confinement, 'non établi'),
                 'limite': self.LIMIT,
             },
-            'couverture': dict(self.COVERAGE),
+            'couverture': dict(self.coverage) if status == 'réussi' else dict(self.COVERAGE),
             'etapes': self.steps, 'captures': self.captures,
             'nettoyage': cleanup, 'isolation': isolation,
         }
@@ -971,7 +977,7 @@ def markdown_summary(report):
              '| Étape | Statut | Durée |', '|---|---|---|']
     for step in report['etapes']:
         lines.append(f'| {escape(step["titre"])} | {step["statut"]} | {step.get("durée_s", 0):.2f} s |')
-    coverage = ' · '.join(f'{name} {"✅" if value == "couvert" else "❌"}'
+    coverage = ' · '.join(f'{name} {"✅" if value.startswith("couvert") else "❌"}'
                           for name, value in report['couverture'].items())
     lines += ['', f'- Couverture : {coverage}',
               f'- Confinement : {report["environnement"]["confinement"]} '
