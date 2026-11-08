@@ -60,12 +60,18 @@ def expected_ruleset():
             {'type': 'pull_request', 'parameters': {
                 'required_approving_review_count': 0,
                 'dismiss_stale_reviews_on_push': False,
+                # GitHub includes these canonical defaults in the GET response.
+                # Keep them explicit rather than silently dropping any fields.
+                'required_reviewers': [],
+                'allowed_merge_methods': ['merge', 'squash', 'rebase'],
+                'require_extra_approval_for_unattributed_changes': True,
                 'require_code_owner_review': False,
                 'require_last_push_approval': False,
                 'required_review_thread_resolution': False,
             }},
             {'type': 'required_status_checks', 'parameters': {
                 'strict_required_status_checks_policy': True,
+                'do_not_enforce_on_create': False,
                 'required_status_checks': [{'context': name, 'integration_id': GITHUB_ACTIONS_APP}
                                            for name in REQUIRED_CHECKS],
             }},
