@@ -48,8 +48,11 @@ ne jamais enregistrer l'URL secrète du webhook dans Git ou dans une conversatio
 
 1. Valider le commit candidat et vérifier la cohérence des versions, sources,
    licences et dépendances.
-2. Le workflow Fedora avance automatiquement `publication` après réussite des
-   contrôles Python et Fedora, sans écraser des changements de branche non examinés.
+2. Aucune publication n'est automatique. Le mainteneur lance le workflow
+   « RPM Fedora et documentation installée » sur `main` en tapant `PUBLIER`,
+   puis approuve l'environnement protégé `publication-copr`. Après réussite des
+   contrôles Python et Fedora, le job avance `publication` ; il refuse si la
+   révision RPM n'a pas augmenté. Procédure : `docs/PUBLICATION-CONTROLEE.md`.
 3. Vérifier que COPR construit ce commit ; si le webhook est actif, contrôler
    son résultat plutôt que supposer qu'un push a réussi à publier.
 4. Attendre la réussite dans chaque environnement Fedora annoncé.

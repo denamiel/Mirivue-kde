@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publier_copr:
+        description: 'Pour publier dans COPR le commit main testé, taper exactement PUBLIER'
+        required: false
+        default: ''
   schedule:
     - cron: '23 5 * * 1'
 permissions:
@@ -101,9 +106,15 @@ jobs:
 
   publish:
     name: Publier dans COPR après les contrôles obligatoires
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Publication uniquement sur demande explicite : lancement manuel sur main,
+    # confirmation tapée, puis approbation dans l'environnement protégé.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main'
+      && inputs.publier_copr == 'PUBLIER'
     needs: [rpm, python]
     runs-on: ubuntu-latest
+    environment: publication-copr
     permissions:
       contents: write
     concurrency:
@@ -124,4 +135,10 @@ jobs:
             exit 0
           fi
           git merge-base --is-ancestor origin/publication "$TESTED_COMMIT"
+          # Never publish a different build under an already published NVR.
+          nvr() { git show "$1:packaging/fedora/mirivue-kde.spec" | sed -n 's/^\(Version\|Release\): *//p' | tr '\n' ' '; }
+          if [ "$(nvr origin/publication)" = "$(nvr "$TESTED_COMMIT")" ]; then
+            echo "Révision RPM inchangée ($(nvr "$TESTED_COMMIT")) : augmenter Release avant de publier." >&2
+            exit 1
+          fi
           git push origin "$TESTED_COMMIT:refs/heads/publication"

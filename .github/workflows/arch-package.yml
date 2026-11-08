@@ -37,9 +37,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
   publish:
+    # Joindre le paquet à une release reste soumis à l'approbation du mainteneur.
     if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
+    environment: publication-arch
     permissions:
       contents: write
     steps:
