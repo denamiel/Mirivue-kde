@@ -86,7 +86,10 @@ jobs:
     needs: rpm
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    container: fedora:45
+    container:
+      image: fedora:45
+      # An init process reaps the processes that TestLab kills.
+      options: --init
     permissions:
       contents: read
     env:

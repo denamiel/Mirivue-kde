@@ -301,6 +301,21 @@ class FakeApplicationRuns(unittest.TestCase):
         self.assertFalse(lab.root.exists())
 
 
+class ZombieHandling(unittest.TestCase):
+    def test_zombies_are_not_counted_as_running_processes(self):
+        child = subprocess.Popen([sys.executable, '-c', 'pass'], env=dict(os.environ, **{
+            harness.MARKER: '/tmp/mirivue-testlab-zombie'}))
+        deadline = time.monotonic() + 10
+        while not harness.is_zombie(Path(f'/proc/{child.pid}/status').read_text()):
+            self.assertLess(time.monotonic(), deadline, 'le processus aurait dû devenir zombie')
+            time.sleep(0.05)
+        try:
+            self.assertNotIn(child.pid, harness.marked_processes('/tmp/mirivue-testlab-zombie', {os.getuid()}))
+            self.assertNotIn(child.pid, harness.processes_of_uid(os.getuid()))
+        finally:
+            child.wait()
+
+
 class DisplayLockSafety(unittest.TestCase):
     def setUp(self):
         self.directory = Path(tempfile.mkdtemp(prefix='testlab-verrou-'))

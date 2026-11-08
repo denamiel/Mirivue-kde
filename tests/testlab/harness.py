@@ -178,6 +178,8 @@ def marked_processes(root, uids=None, dedicated_uid=None):
             # The real UID from status: /proc/<pid> itself belongs to root
             # when the process is not dumpable (e.g. after a UID change).
             status = (entry / 'status').read_text()
+            if is_zombie(status):
+                continue
             real_uid = int(re.search(r'^Uid:\s+(\d+)', status, re.M).group(1))
             if dedicated_uid is not None and real_uid == dedicated_uid:
                 found.append(int(entry.name))
@@ -192,6 +194,12 @@ def marked_processes(root, uids=None, dedicated_uid=None):
     return sorted(found)
 
 
+def is_zombie(status):
+    """A zombie runs nothing: it waits for a parent (or a container without an
+    init process) to reap it, and it cannot be killed."""
+    return bool(re.search(r'^State:\s+Z', status, re.M))
+
+
 def processes_of_uid(uid):
     found = []
     for entry in Path('/proc').iterdir():
@@ -201,7 +209,7 @@ def processes_of_uid(uid):
             except OSError:
                 continue
             match = re.search(r'^Uid:\s+(\d+)', status, re.M)
-            if match and int(match.group(1)) == uid:
+            if match and int(match.group(1)) == uid and not is_zombie(status):
                 found.append(int(entry.name))
     return found
 
