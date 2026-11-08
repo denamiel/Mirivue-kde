@@ -27,9 +27,9 @@
     <content_rating type="oars-1.1" />
     <url type="homepage">https://github.com/denamiel/Mirivue-kde</url>
   <releases>
-      <release version="1.0.0-beta.5" date="2026-11-05" type="development">
+      <release version="1.0.0-beta.6" date="2026-11-08" type="development">
         <description>
-          <p>Use native KDE file properties, simple renaming and directory inventories while preserving bulk renaming.</p>
+          <p>Make KIO act on exactly the selected item: names ending with spaces, symbolic links and remote deletion; list dangling symbolic links.</p>
         </description>
       </release>
     </releases>
