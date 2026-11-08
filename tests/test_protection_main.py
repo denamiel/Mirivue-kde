@@ -52,6 +52,31 @@ class MainProtection(unittest.TestCase):
     def test_absent_ruleset_is_reported(self):
         self.assertEqual(protection.analyse(None), ['règle absente : main n’exige aucun contrôle'])
 
+    def test_github_canonical_defaults_are_accepted(self):
+        """GitHub GET expands parameters omitted from the POST payload."""
+        ruleset = copy.deepcopy(protection.expected_ruleset())
+        expected = ruleset['rules'][2]['parameters']
+        self.assertEqual(expected['required_reviewers'], [])
+        self.assertEqual(expected['allowed_merge_methods'], ['merge', 'squash', 'rebase'])
+        self.assertTrue(expected['require_extra_approval_for_unattributed_changes'])
+        self.assertFalse(ruleset['rules'][3]['parameters']['do_not_enforce_on_create'])
+        ruleset.update(id=26800965, source='denamiel/Mirivue-kde')
+        self.assertEqual(protection.analyse(ruleset), [])
+
+    def test_modified_canonical_defaults_are_still_detected(self):
+        cases = (
+            (2, 'allowed_merge_methods', ['merge']),
+            (2, 'required_reviewers', [{'id': 42}]),
+            (2, 'require_extra_approval_for_unattributed_changes', False),
+            (3, 'do_not_enforce_on_create', True),
+        )
+        for rule_index, key, value in cases:
+            with self.subTest(field=key):
+                ruleset = copy.deepcopy(protection.expected_ruleset())
+                ruleset['rules'][rule_index]['parameters'][key] = value
+                self.assertTrue(protection.analyse(ruleset))
+                self.assertEqual(protection.decide(ruleset, runs(protection.REQUIRED_CHECKS))[0], 'refuser')
+
     def test_weakened_rulesets_are_reported(self):
         cases = {
             'mode évaluation': lambda r: r.update(enforcement='evaluate'),
