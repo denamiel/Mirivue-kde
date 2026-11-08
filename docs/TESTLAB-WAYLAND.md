@@ -26,8 +26,21 @@ Paquets : `kwin` 6.8.2, `qt6-qtwayland` 6.11.2, `wl-clipboard` 2.3.0, `dbus-tool
 | `ydotool` | `/dev/uinput` | ❌ inexistant en conteneur et non souhaitable |
 | EIS / libei (`org.kde.KWin.EIS.RemoteDesktop`) | Présent | Non utilisé : aucun client Python empaqueté ; `fake_input` suffit |
 
-`KWIN_WAYLAND_NO_PERMISSION_CHECKS=1` ouvre les interfaces restreintes (`fake_input`,
-ScreenShot2, scripts) **uniquement pour ce KWin jetable**.
+### `KWIN_WAYLAND_NO_PERMISSION_CHECKS` : périmètre strict
+
+Cette variable ouvre à tout client du socket les interfaces restreintes (`fake_input`,
+ScreenShot2, scripts). Elle n'est acceptable que pour un KWin jetable dont le socket est
+inaccessible aux autres utilisateurs. Le harness l'impose :
+- elle n'est placée que dans l'environnement de KWin (`kwin_environment()`) ;
+- le harness refuse de démarrer si elle figure dans l'environnement de l'application ;
+- KWin ne démarre que si son `XDG_RUNTIME_DIR`, qui contient le socket Wayland, est en 0700
+  et appartient au compte qui exécute KWin (`check_private_runtime()`) ;
+- en mode `uid`, ce compte est le compte de test dédié, et le socket n'est joignable que
+  par lui (et par root).
+
+`tests/test_testlab_wayland.py` vérifie ces trois règles.
+**Ne jamais définir cette variable dans une vraie session Plasma** : n'importe quel programme
+de l'utilisateur pourrait alors simuler des frappes ou lire l'écran.
 
 ### Deux obstacles trouvés et contournés
 
@@ -49,8 +62,24 @@ ScreenShot2, scripts) **uniquement pour ce KWin jetable**.
 
 Les runners GitHub n'ont pas de GPU. Le job `testlab-wayland` charge le module noyau
 `vgem` sur le runner (`sudo modprobe vgem`), qui crée un nœud de rendu virtuel sans
-matériel, puis le transmet au conteneur Fedora (`--device /dev/dri`). Le rendu est
-alors logiciel (Mesa).
+matériel. Le rendu est alors logiciel (Mesa).
+
+**Ce point dépend des runners hébergés de GitHub :** VM éphémère, `sudo` disponible et module
+`vgem` fourni par le noyau Ubuntu. Sur un autre runner, le job échoue au chargement du module ;
+il ne fait jamais de repli silencieux.
+
+**Permissions minimales.**
+- Seul **un** nœud de rendu est transmis (`--device <nœud>:/dev/dri/renderD128`), pas tout
+  `/dev/dri`.
+- Docker crée **sa propre copie** du nœud dans le `/dev` privé du conteneur. Dans cette copie,
+  le nœud appartient au groupe `testlab-rendu`, dont le compte de test est **le seul membre**,
+  en mode **0660** et non 0666.
+- Le harness ne garde pour ce compte que ses propres groupes supplémentaires.
+- Une étape finale compare les permissions du nœud **sur l'hôte** avant et après, et échoue
+  si elles ont changé.
+
+En local, avec podman sans privilèges, le nœud est monté depuis l'hôte : il ne faut pas
+modifier ses permissions.
 
 **Ce point est validé par l'exécution CI de la PR**. S'il échouait, le job resterait
 informatif, et la seconde étape (VM) deviendrait nécessaire pour Wayland.
@@ -67,8 +96,23 @@ Contrairement à Xvfb, KWin gère réellement le focus. Les scénarios **vérifi
 retour automatique au lieu de le forcer.
 
 Les positions des icônes du glisser-déposer sont fixes (fenêtre en 0,0, 1280×800,
-décorations KWin). Un changement de disposition fait échouer le scénario avec une capture :
-il ne peut pas réussir par erreur.
+décorations KWin). Avant de glisser, le scénario **vérifie la disposition**. Un Ctrl+clic, qui
+sélectionne sans ouvrir quel que soit le réglage simple ou double clic, suivi de Ctrl+C, doit
+désigner exactement `note.txt`, puis `Existant`.
+
+Sinon, l'échec est signalé comme une « disposition inattendue », avec une capture : il ne se
+confond pas avec une défaillance du glisser-déposer. Ce chemin a été vérifié volontairement
+avec des coordonnées fausses.
+
+### Stabilité
+
+La CI exécute **chaque scénario Wayland trois fois** par PR (rapports séparés `<scénario>-<n>`).
+Localement, dans un conteneur Fedora 45, toutes les passes ont réussi : 3 de
+`wayland-glisser-deposer` et 2 de `wayland-essentiel`.
+
+Critère proposé avant de rendre le job obligatoire : **10 exécutions CI consécutives sans
+échec**, soit 30 passes par scénario, sur des PR réelles. Tout échec non expliqué remet le
+compteur à zéro.
 
 ## Rapports
 
@@ -128,11 +172,16 @@ Ces fonctions ne peuvent pas être validées par un KWin seul :
 
 ## Intégration progressive
 
-1. **Aujourd'hui :** le job `testlab-wayland` tourne sur chaque PR, mais il est
+1. **Ordre d'intégration :**
+   - fusionner d'abord la PR n° 9 ;
+   - recibler cette PR sur `main`, la mettre à jour et refaire tourner **toute** la CI ;
+   - le ruleset de `main` ne doit pas être appliqué avant la fusion de la PR n° 9 (voir
+     `docs/TESTLAB.md`). Il ne référence pas le job Wayland.
+2. **Aujourd'hui :** le job `testlab-wayland` tourne sur chaque PR, mais il est
    **informatif**. Il ne bloque ni la publication COPR ni la fusion :
    `packaging/protection-main.py` le classe dans `INFORMATIVE_CHECKS`.
-2. **Après plusieurs exécutions CI stables :**
+3. **Après le critère de stabilité :**
    - le déplacer dans `REQUIRED_CHECKS` ;
    - l'ajouter à `publish.needs` ;
    - ces deux modifications sont soumises à revue.
-3. **Ensuite :** la VM Plasma, d'abord la nuit, puis sur les PR concernées.
+4. **Ensuite :** la VM Plasma, d'abord la nuit, puis sur les PR concernées.

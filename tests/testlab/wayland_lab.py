@@ -15,7 +15,15 @@ an X11 fallback is impossible. Nothing here uses xdotool or X11:
   passing), converted to PNG without third-party modules.
 
 KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 opens these restricted interfaces for
-the disposable compositor only.
+the disposable compositor only: it is set in KWin's own environment, never in
+the application's, and KWin refuses to start unless its runtime directory
+(holding the Wayland socket) is private (0700, owned by the account running
+KWin). It must never be set in a user's real Plasma session.
+
+Device access: KWin needs exactly one DRM render node. It is reached through
+the dedicated account's own supplementary groups (CI gives the container's
+copy of the node to a group whose only member is that account, mode 0660),
+never through a world-writable device.
 
 Limits: this is KWin alone. There is no plasmashell (panels, notifications,
 global menu), no xdg-desktop-portal, no real GPU or input device, and no
@@ -102,6 +110,8 @@ class WaylandLab(Lab):
     # ------------------------------------------------------------- services
     def _start_services(self):
         """Wayland: the bus first (KWin registers on it), then KWin."""
+        if 'KWIN_WAYLAND_NO_PERMISSION_CHECKS' in self.environment:
+            raise EnvironmentUnavailable('KWIN_WAYLAND_NO_PERMISSION_CHECKS ne doit jamais atteindre l’application.')
         if not glob.glob('/dev/dri/renderD*'):
             raise EnvironmentUnavailable(
                 'Aucun nœud de rendu DRM (/dev/dri/renderD*) : KWin 6.8 ne compose pas sans lui. '
@@ -125,6 +135,35 @@ class WaylandLab(Lab):
         self.wait_until(lambda: self.monitor_log.stat().st_size > 0, 10, 'démarrage de dbus-monitor',
                         allow_exit=True)
 
+    def _process_options(self):
+        """In uid mode, keep the dedicated account's own supplementary groups:
+        the render-node group is the only way KWin reaches the device."""
+        options = super()._process_options()
+        if options:
+            account = self.test_account
+            options['extra_groups'] = [group for group in os.getgrouplist(account.pw_name, account.pw_gid)
+                                       if group != account.pw_gid]
+        return options
+
+    def kwin_environment(self):
+        """KWin's environment: the only place where permission checks are disabled."""
+        environment = dict(self.environment)
+        for variable in ('QT_QPA_PLATFORM', 'WAYLAND_DISPLAY', 'DISPLAY', 'XAUTHORITY'):
+            environment.pop(variable, None)
+        environment.update(KWIN_WAYLAND_NO_PERMISSION_CHECKS='1', QT_FORCE_STDERR_LOGGING='1',
+                           XDG_SESSION_TYPE='wayland')
+        return environment
+
+    def check_private_runtime(self):
+        """The Wayland socket of a permission-less KWin must be unreachable by others."""
+        runtime = self.root / 'run'
+        info = runtime.stat()
+        owner = self.test_account.pw_uid if self.confinement == 'uid' else os.getuid()
+        if info.st_mode & 0o077 or info.st_uid != owner:
+            raise EnvironmentUnavailable(
+                f'{runtime} doit être privé (0700, propriétaire {owner}) avant de démarrer un KWin sans '
+                f'contrôle de permissions ; mode actuel {oct(info.st_mode & 0o777)}, propriétaire {info.st_uid}.')
+
     def _start_kwin(self):
         # kwin_wayland carries cap_sys_nice, which a container cannot grant:
         # a private copy without file capabilities runs everywhere.
@@ -133,17 +172,15 @@ class WaylandLab(Lab):
         shutil.copyfile(shutil.which('kwin_wayland'), self.kwin_binary)
         self.kwin_binary.chmod(0o755)
         self._own(self.root / 'bin')
-        environment = dict(self.environment)
-        for variable in ('QT_QPA_PLATFORM', 'WAYLAND_DISPLAY'):
-            environment.pop(variable, None)
-        environment.update(KWIN_WAYLAND_NO_PERMISSION_CHECKS='1', QT_FORCE_STDERR_LOGGING='1',
-                           XDG_SESSION_TYPE='wayland')
+        self.check_private_runtime()
+        environment = self.kwin_environment()
         self._service('kwin', [str(self.kwin_binary), '--virtual', '--width', str(WIDTH), '--height', str(HEIGHT),
                                '--socket', SOCKET, '--no-lockscreen', '--no-kactivities'],
                       as_test_account=True, environment=environment)
         socket_path = self.root / 'run' / SOCKET
         self.wait_until(socket_path.exists, 20, 'socket Wayland de KWin', allow_exit=True)
         self.environment.update(WAYLAND_DISPLAY=SOCKET, QT_QPA_PLATFORM='wayland', XDG_SESSION_TYPE='wayland')
+
         self.display = SOCKET
         # KWin registers org.kde.KWin once its scripting is ready.
         self.wait_until(lambda: self._busctl('status', 'org.kde.KWin', check=False)[0] == 0, 20,
@@ -262,6 +299,17 @@ report(true);''')
         self.input.button(button, True)
         self.input.button(button, False)
         time.sleep(0.2)
+
+    def ctrl_click(self, position):
+        """Toggle the selection of the item under the pointer without activating it,
+        whatever the single/double-click setting."""
+        self.input.key_event(wayland.KEYS['ctrl'], True)
+        self.input.roundtrip()
+        try:
+            self.click(position)
+        finally:
+            self.input.key_event(wayland.KEYS['ctrl'], False)
+            self.input.roundtrip()
 
     def clipboard(self, target='text/uri-list'):
         result = subprocess.run(['wl-paste', '--no-newline', '--type', target], env=self.environment,

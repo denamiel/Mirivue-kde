@@ -8,6 +8,8 @@ returns to the right window by itself instead of forcing it.
 """
 import time
 
+from .harness import ScenarioFailure
+
 from .scenarios import FIRST_USE, MAIN_WINDOW, NEW_FOLDER_DIALOG, NEW_FOLDER_NAME
 
 # Icon view, window at 0,0 1280x800 with KWin server-side decorations: the
@@ -103,6 +105,22 @@ def essential(lab):
 def drag_and_drop(lab):
     """Drag a file onto a folder with the pointer, then choose « Déplacer ici »."""
     application, main, folder = _start(lab)
+    with lab.step('Vérifier la disposition : les coordonnées désignent bien note.txt et Existant'):
+        # Distinguishes a layout change (fonts, icon size, decorations) from a
+        # real drag-and-drop failure: Ctrl+clic selects without activating.
+        for position, name in ((FILE_ITEM, 'note.txt'), (FOLDER_ITEM, 'Existant')):
+            expected = [(folder / name).as_uri()]
+            lab.ctrl_click(position)
+            lab.key('ctrl+c')
+            try:
+                lab.wait_until(lambda: lab.clipboard().split() == expected, 5, f'{name} sous {position}')
+            except ScenarioFailure:
+                raise ScenarioFailure(
+                    f'Disposition inattendue : {position} ne désigne pas « {name} » '
+                    f'(presse-papiers : {lab.clipboard().split()}). Ce n’est pas un échec du glisser-déposer : '
+                    'mettre à jour FILE_ITEM/FOLDER_ITEM d’après la capture.') from None
+            lab.ctrl_click(position)
+        lab.screenshot('disposition-verifiee')
     with lab.step('Glisser « note.txt » sur « Existant » avec le pointeur'):
         before = {identifier for identifier, _ in lab.visible_windows()}
         lab.screenshot('avant-glisser')

@@ -196,6 +196,53 @@ class ScreenshotAndClaims(unittest.TestCase):
             self.assertTrue(report['nettoyage']['reussi'])
 
 
+class PermissionBoundaries(unittest.TestCase):
+    """KWIN_WAYLAND_NO_PERMISSION_CHECKS stays inside the disposable KWin."""
+
+    def lab(self, directory, **options):
+        lab = WaylandLab('essai', Path(directory) / 'artefacts', base=directory, watch=[], confinement='aucun',
+                         **options)
+        lab.root = Path(directory) / 'racine'
+        (lab.root / 'run').mkdir(parents=True, mode=0o700)
+        lab.confinement = 'aucun'
+        lab.environment = {'PATH': '/usr/bin', 'HOME': str(lab.root / 'home'), 'QT_QPA_PLATFORM': 'wayland',
+                           'WAYLAND_DISPLAY': 'wayland-testlab', 'DISPLAY': ':5'}
+        return lab
+
+    def test_permission_checks_are_disabled_for_kwin_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lab = self.lab(directory)
+            kwin = lab.kwin_environment()
+            self.assertEqual(kwin['KWIN_WAYLAND_NO_PERMISSION_CHECKS'], '1')
+            for variable in ('QT_QPA_PLATFORM', 'WAYLAND_DISPLAY', 'DISPLAY'):
+                self.assertNotIn(variable, kwin, 'KWin ne doit pas se connecter comme client')
+            self.assertNotIn('KWIN_WAYLAND_NO_PERMISSION_CHECKS', lab.environment)
+
+    def test_injected_permission_bypass_never_reaches_the_application(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lab = self.lab(directory)
+            lab.environment['KWIN_WAYLAND_NO_PERMISSION_CHECKS'] = '1'
+            with self.assertRaisesRegex(EnvironmentUnavailable, 'jamais atteindre'):
+                lab._start_services()
+
+    def test_kwin_refuses_a_shared_runtime_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lab = self.lab(directory)
+            lab.check_private_runtime()
+            (lab.root / 'run').chmod(0o755)
+            with self.assertRaisesRegex(EnvironmentUnavailable, 'privé'):
+                lab.check_private_runtime()
+
+    def test_render_node_group_is_the_only_supplementary_group_kept(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lab = self.lab(directory)
+            lab.confinement = 'uid'
+            lab.test_account = mock.Mock(pw_name='mirivue-testlab', pw_uid=990, pw_gid=990)
+            with mock.patch('testlab.wayland_lab.os.getgrouplist', return_value=[990, 4242]):
+                options = lab._process_options()
+            self.assertEqual(options, {'user': 990, 'group': 990, 'extra_groups': [4242]})
+
+
 def wayland_requirements():
     missing = harness.missing_tools(WaylandLab.DISPLAY_TOOLS + harness.BUS_TOOLS)
     if not glob.glob('/dev/dri/renderD*'):
