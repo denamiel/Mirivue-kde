@@ -78,6 +78,45 @@ jobs:
           path: dist/rpms/x86_64/*.rpm
           if-no-files-found: error
 
+  testlab:
+    name: TestLab — vraie fenêtre sous Xvfb (Fedora 45)
+    # Starts the installed RPM in a disposable X11 session (Xvfb, private
+    # D-Bus, disposable HOME/XDG/Trash). It is not a Plasma Wayland validation.
+    needs: rpm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: fedora:45
+    permissions:
+      contents: read
+    steps:
+      - name: Préparer la session graphique jetable
+        run: dnf -y install python3 xorg-x11-server-Xvfb xdotool xwd xclip dbus-daemon
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Installer le RPM testé
+        run: dnf -y --setopt=tsflags= install dist/rpms/*.rpm
+      - name: Tests du harness (succès, échec, délai, isolation, nettoyage)
+        env:
+          MIRIVUE_TESTLAB_REQUIRE_DISPLAY: '1'
+        run: timeout 600 python3 -m unittest discover -s tests -p test_testlab_harness.py -v
+      - name: Scénario de bout en bout — nouveau dossier au clavier
+        run: |
+          # The CI HOME stands in for a personal folder and must stay unchanged.
+          mkdir -p "$HOME/.config" "$HOME/.local/share"
+          timeout 300 python3 tests/testlab/run.py nouveau-dossier --artefacts testlab-artefacts/nouveau-dossier --surveiller "$HOME"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testlab-fedora-45
+          path: testlab-artefacts
+          if-no-files-found: warn
+          retention-days: 14
+
   python:
     name: Python ${{ matrix.python }} — imports et fichiers
     runs-on: ubuntu-latest
