@@ -160,7 +160,9 @@ MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 python3 -m unittest discover -s tests -p test_
 ```
 
 Sur un poste de développement, en utilisateur ordinaire, le mode `bwrap` est choisi
-automatiquement si bubblewrap fonctionne. Les PR non fiables restent réservées à la CI ou à
+automatiquement si bubblewrap fonctionne. Les tests unitaires qui lancent l'application réelle
+sont ignorés tant que `MIRIVUE_TESTLAB_RUN_REAL=1` n'est pas défini, afin de ne jamais
+démarrer Mirivue par accident sur un poste personnel. Les PR non fiables restent réservées à la CI ou à
 une VM ou un conteneur jetable (par exemple `podman run --rm`, avec le dépôt monté en
 lecture seule et sans `HOME` monté).
 
