@@ -121,6 +121,64 @@ class TestPublishJobsNeedExplicitAuthorization(unittest.TestCase):
         self.assertLess(script.index('verifier-revision-publication.py'), script.index('git push'))
 
 
+ENV_TOOL = ROOT / 'packaging' / 'environnements-publication.py'
+env_spec = importlib.util.spec_from_file_location('environnements_publication', ENV_TOOL)
+environnements = importlib.util.module_from_spec(env_spec)
+env_spec.loader.exec_module(environnements)
+
+
+class TestEnvironmentRules(unittest.TestCase):
+    MAINTAINER = 42
+
+    def environment(self, reviewers=((('User', 42),)), prevent=False, timer=0, bypass=False, custom=True):
+        rules = [{'type': 'required_reviewers', 'prevent_self_review': prevent,
+                  'reviewers': [{'type': kind, 'reviewer': {'id': ident, 'login': f'compte{ident}'}}
+                                for kind, ident in reviewers]}]
+        if timer:
+            rules.append({'type': 'wait_timer', 'wait_timer': timer})
+        return {'protection_rules': rules, 'can_admins_bypass': bypass,
+                'deployment_branch_policy': {'protected_branches': not custom, 'custom_branch_policies': custom}}
+
+    def branches(self, *policies):
+        return {'branch_policies': [{'type': kind, 'name': name} for kind, name in policies]}
+
+    def analyse(self, environment, branches):
+        return environnements.analyse(environment, branches, self.MAINTAINER)
+
+    def test_compliant_environment(self):
+        self.assertEqual(self.analyse(self.environment(), self.branches(('branch', 'main'))), ([], []))
+
+    def test_absent_environment_is_only_created_by_apply(self):
+        self.assertEqual(self.analyse(None, None), ([], ['environnement absent']))
+
+    def test_other_reviewers_block_apply_instead_of_being_replaced(self):
+        blocking, _ = self.analyse(self.environment(reviewers=(('User', 42), ('User', 7), ('Team', 9))),
+                                   self.branches(('branch', 'main')))
+        self.assertTrue(any('autres approbateurs' in item for item in blocking), blocking)
+
+    def test_other_branch_or_tag_policies_block_apply(self):
+        for extra in (('branch', 'dev'), ('tag', 'v*')):
+            with self.subTest(extra=extra):
+                blocking, _ = self.analyse(self.environment(), self.branches(('branch', 'main'), extra))
+                self.assertTrue(any('autres règles' in item for item in blocking), blocking)
+
+    def test_admin_bypass_is_reported_as_blocking(self):
+        blocking, _ = self.analyse(self.environment(bypass=True), self.branches(('branch', 'main')))
+        self.assertTrue(any('administrateurs' in item for item in blocking), blocking)
+
+    def test_safe_differences_are_fixable(self):
+        for environment, branches, expected in (
+                (self.environment(prevent=True), self.branches(('branch', 'main')), 'prevent_self_review'),
+                (self.environment(timer=10), self.branches(('branch', 'main')), 'délai'),
+                (self.environment(custom=False), self.branches(), 'non limité'),
+                (self.environment(), self.branches(), 'main non déclarée'),
+                (self.environment(reviewers=()), self.branches(('branch', 'main')), 'non obligatoire')):
+            with self.subTest(expected=expected):
+                blocking, fixable = self.analyse(environment, branches)
+                self.assertEqual(blocking, [])
+                self.assertTrue(any(expected in item for item in fixable), fixable)
+
+
 class TestRpmReleaseGuard(unittest.TestCase):
     def test_rpmvercmp_cases(self):
         cases = [

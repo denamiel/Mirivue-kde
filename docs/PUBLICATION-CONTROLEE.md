@@ -1,9 +1,11 @@
 # Publication contrôlée de Mirivue KDE
 
 **Principe :** valider le code et publier des paquets sont deux décisions
-distinctes. Une fusion dans `main`, une CI verte, un tag, une release GitHub ou
-un push ne publient jamais rien. **Chaque** publication (COPR, paquets Arch
-joints à une release, dépôt Pacman) exige trois conditions réunies :
+distinctes. Une fusion dans `main`, une CI verte, un tag ou un push ne
+publient **aucun paquet**. Créer une release GitHub reste possible à la main,
+mais aucun paquet n’y est joint automatiquement. **Chaque** publication de
+paquets (COPR, paquets Arch joints à une release, dépôt Pacman) exige trois
+conditions réunies :
 
 1. un lancement **manuel** du workflow sur `main` ;
 2. la confirmation tapée `PUBLIER` ;
@@ -48,13 +50,18 @@ lance la publication doit pouvoir l’approuver, sinon aucune publication n’es
 possible. L’approbation reste une seconde action explicite, distincte du
 lancement et de la saisie `PUBLIER`.
 
+`--appliquer` crée un environnement absent ou complète un environnement sûr.
+S’il trouve d’autres approbateurs, d’autres règles de branche ou de tag, ou le
+contournement par les administrateurs, il les liste et **ne modifie rien** :
+les retirer soi-même dans *Settings → Environments* après vérification.
+
 **Limite.** Ces protections empêchent toute publication automatique ou
 accidentelle. Elles ne protègent pas contre une personne ou un outil disposant
 du jeton GitHub du mainteneur, qui pourrait lancer et approuver lui-même.
 
 ```bash
-packaging/environnements-publication.sh --verifier    # lecture seule
-packaging/environnements-publication.sh --appliquer   # crée ou corrige les trois environnements
+python3 packaging/environnements-publication.py --verifier    # lecture seule
+python3 packaging/environnements-publication.py --appliquer   # crée ou complète, ne supprime rien
 ```
 
 ## Publier dans COPR
@@ -75,7 +82,7 @@ packaging/environnements-publication.sh --appliquer   # crée ou corrige les tro
 
 ## Paquets Arch joints à une release
 
-Une release ou un tag ne déclenchent plus rien. Après avoir créé la release sur
+Une release ou un tag ne déclenchent plus aucune publication de paquet. Après avoir créé la release sur
 le commit de `main` à distribuer :
 
 ```bash
@@ -102,6 +109,19 @@ immédiate et réversible, à décider par le mainteneur :
 ```bash
 gh variable set PUBLISH_ENABLED --body false --repo denamiel/mirivue-arch
 ```
+
+## Contrôler qu’un passage planifié ne publie rien
+
+Après fusion, sans jamais lancer une vraie publication pour tester :
+
+```bash
+gh run list --repo denamiel/mirivue-arch --workflow repository.yml --event schedule --limit 1 \
+  --json databaseId --jq '.[0].databaseId' \
+  | xargs -I{} gh run view {} --repo denamiel/mirivue-arch --json jobs \
+      --jq '.jobs[] | select(.name | startswith("Publier")) | "\(.name) : \(.conclusion)"'
+```
+
+Résultat attendu : `skipped`, et un manifeste inchangé (commande ci-dessous).
 
 ## Vérifier ce qui est réellement publié
 
