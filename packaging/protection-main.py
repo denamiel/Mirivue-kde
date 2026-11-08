@@ -33,6 +33,11 @@ REQUIRED_CHECKS = (
     'TestLab — vraie fenêtre sous Xvfb (Fedora 45)',
     'build',
 )
+# Reported on every PR but not yet required: the Wayland lab becomes mandatory
+# once its CI runs are stable (docs/TESTLAB-WAYLAND.md).
+INFORMATIVE_CHECKS = (
+    'TestLab Wayland — KWin virtuel (Fedora 45)',
+)
 
 
 def expected_ruleset():

@@ -15,7 +15,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from testlab.harness import Lab, markdown_summary  # noqa: E402
-from testlab.scenarios import SCENARIOS  # noqa: E402
+from testlab.scenarios import all_scenarios  # noqa: E402
+
+SCENARIOS = all_scenarios()
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -47,7 +49,11 @@ def main(arguments=None):
     if options.artefacts.exists() and any(options.artefacts.iterdir()):
         parser.error(f'le dossier d’artefacts doit être vide : {options.artefacts}')
     command, cwd, extra = application_command(options.application)
-    lab = Lab(options.scenario, options.artefacts, app=command, timeout=options.delai,
+    lab_class = Lab
+    if SCENARIOS[options.scenario][2] == 'wayland':
+        from testlab.wayland_lab import WaylandLab
+        lab_class = WaylandLab
+    lab = lab_class(options.scenario, options.artefacts, app=command, timeout=options.delai,
               launch_cwd=cwd, extra_environment=extra, user=options.utilisateur,
               confinement=options.confinement, require_confinement=options.exiger_confinement)
     if options.surveiller:

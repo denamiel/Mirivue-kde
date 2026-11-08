@@ -92,7 +92,23 @@ def failure_control(lab):
         lab.wait_window(r'^Fenêtre inexistante du TestLab$', timeout=3)
 
 
+# name -> (function, description, engine). The Wayland scenarios live in
+# wayland_scenarios.py and run in WaylandLab (KWin virtual backend).
 SCENARIOS = {
-    'nouveau-dossier': (new_folder, 'Création d’un dossier au clavier dans la vraie fenêtre'),
-    'controle-echec': (failure_control, 'Contrôle négatif : doit échouer avec capture et rapport'),
+    'nouveau-dossier': (new_folder, 'Création d’un dossier au clavier dans la vraie fenêtre', 'x11'),
+    'controle-echec': (failure_control, 'Contrôle négatif : doit échouer avec capture et rapport', 'x11'),
 }
+
+
+def all_scenarios():
+    from . import wayland_scenarios
+    scenarios = dict(SCENARIOS)
+    scenarios.update({
+        'wayland-essentiel': (wayland_scenarios.essential,
+                              'Focus, activation, raccourcis, dialogue et presse-papiers en Wayland natif', 'wayland'),
+        'wayland-glisser-deposer': (wayland_scenarios.drag_and_drop,
+                                    'Glisser-déposer au pointeur et menu de dépôt en Wayland natif', 'wayland'),
+        'wayland-controle-echec': (wayland_scenarios.failure_control,
+                                   'Contrôle négatif Wayland : doit échouer avec capture et rapport', 'wayland'),
+    })
+    return scenarios

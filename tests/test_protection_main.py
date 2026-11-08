@@ -38,7 +38,9 @@ def check_names(workflow):
 class MainProtection(unittest.TestCase):
     def test_required_checks_match_the_real_job_names(self):
         actual = set(check_names('fedora-package.yml')) | set(check_names('arch-package.yml'))
-        self.assertEqual(set(protection.REQUIRED_CHECKS), actual)
+        required, informative = set(protection.REQUIRED_CHECKS), set(protection.INFORMATIVE_CHECKS)
+        self.assertFalse(required & informative)
+        self.assertEqual(required | informative, actual, 'chaque job doit être obligatoire ou explicitement informatif')
 
     def test_graphical_tests_are_required(self):
         self.assertIn('TestLab — vraie fenêtre sous Xvfb (Fedora 45)', protection.REQUIRED_CHECKS)
