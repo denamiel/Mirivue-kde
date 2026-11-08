@@ -5,8 +5,9 @@ reports when cleanup fails and never present Xvfb as a Wayland validation.
 
 When the tests run as root (CI container), MIRIVUE_TESTLAB_USER names the
 unprivileged account that runs the application. The display tests need Xvfb,
-xdotool, xwd, xclip and the installed mirivue-kde; they are skipped where
-those are absent, except when MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 (CI).
+xdotool, xwd, xclip and the installed mirivue-kde. They run only with
+MIRIVUE_TESTLAB_RUN_REAL=1 or MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 (CI, where a
+missing tool is a failure), never by accident in a personal session.
 """
 import json
 import os
@@ -31,6 +32,9 @@ FAKE = TESTS / 'helpers' / 'testlab_fake_application.py'
 RUNNER = TESTS / 'testlab' / 'run.py'
 REQUIRE_DISPLAY = os.environ.get('MIRIVUE_TESTLAB_REQUIRE_DISPLAY') == '1'
 REQUIRE_CONFINEMENT = os.environ.get('MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT') == '1'
+# The real application only runs where explicitly allowed (CI, disposable
+# container or VM), never by accident in a developer's personal session.
+RUN_REAL = REQUIRE_DISPLAY or os.environ.get('MIRIVUE_TESTLAB_RUN_REAL') == '1'
 TEST_USER = os.environ.get('MIRIVUE_TESTLAB_USER')
 IS_ROOT = os.geteuid() == 0
 
@@ -421,6 +425,8 @@ class InstalledApplicationOnXvfb(unittest.TestCase):
     """The real window: the negative control must fail with evidence."""
 
     def setUp(self):
+        if not RUN_REAL:
+            self.skipTest('application réelle : définir MIRIVUE_TESTLAB_RUN_REAL=1 (CI ou conteneur jetable)')
         missing = display_requirements()
         if missing:
             if REQUIRE_DISPLAY:
