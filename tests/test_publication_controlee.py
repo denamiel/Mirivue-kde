@@ -113,6 +113,30 @@ class TestPublishJobsNeedExplicitAuthorization(unittest.TestCase):
                         self.assertEqual(job_name, 'publish', 'commande de publication hors du job protégé')
                         self.assertTrue(job.get('environment'), 'job de publication sans environnement')
 
+    def test_copr_publication_requires_the_mandatory_graphical_tests(self):
+        """A failed or skipped TestLab run must block COPR, without weakening the
+        manual authorization: the publish condition keeps no status function, so
+        GitHub's implicit success() applies to every needed job."""
+        jobs = workflow('fedora-package.yml')['jobs']
+        publish = jobs['publish']
+        self.assertTrue({'rpm', 'python', 'testlab'} <= set(publish['needs']), publish['needs'])
+        self.assertNotRegex(str(publish['if']), r'always|failure|cancelled|success|!')
+        testlab = jobs['testlab']
+        self.assertNotIn('if', testlab, 'TestLab doit tourner pour chaque révision testée')
+        self.assertNotIn('continue-on-error', testlab)
+        for step in testlab['steps']:
+            self.assertNotIn('continue-on-error', step, step.get('name'))
+        self.assertEqual(testlab['permissions'], {'contents': 'read'})
+        self.assertNotIn('secrets.', str(testlab), 'aucun secret dans le job de test')
+        self.assertEqual(testlab['env']['MIRIVUE_TESTLAB_REQUIRE_DISPLAY'], '1')
+        self.assertEqual(testlab['env']['MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT'], '1')
+        self.assertTrue(testlab['env']['MIRIVUE_TESTLAB_USER'])
+        script = '\n'.join(step.get('run', '') for step in testlab['steps'])
+        self.assertIn('test_testlab_harness.py', script)
+        self.assertIn('tests/testlab/run.py nouveau-dossier', script)
+        # The publish job still requires the manual confirmation and environment.
+        self.check_publish_job('fedora-package.yml', 'inputs.publier_copr', 'publication-copr')
+
     def test_copr_job_checks_head_ancestry_and_increasing_release(self):
         script = '\n'.join(step.get('run', '') for step in workflow('fedora-package.yml')['jobs']['publish']['steps'])
         self.assertIn('git rev-parse origin/main', script)

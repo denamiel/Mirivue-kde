@@ -1,7 +1,9 @@
 # Mirivue TestLab — validation des évolutions futures
 
 > État : **première tranche opérationnelle** (PR n° 9). Le banc démarre le RPM
-> installé dans une vraie fenêtre X11 sous Xvfb et le pilote au clavier.
+> installé dans une vraie fenêtre X11 sous Xvfb et le pilote au clavier. Il est
+> **obligatoire avant toute publication COPR**. Il ne constitue **pas** une
+> validation Wayland ou Plasma : chaque rapport l'indique dans son champ `couverture`.
 > Il ne relance **pas** la campagne de 19 essais manuels de la bêta 5 : ses
 > résultats restent historiques.
 
@@ -54,23 +56,50 @@ boîte modale.
 | `xwd.py` | Conversion XWD → PNG sans dépendance tierce |
 | `../test_testlab_harness.py` | Tests du harness lui-même |
 
-### Isolation
+### Isolation et confinement : ce qui est garanti, et ce qui ne l'est pas
 
-- **Dossier jetable :** un dossier `mirivue-testlab-*` est créé sous `MIRIVUE_TESTLAB_TMP`
-  (par défaut `/tmp`). Il est refusé s'il se trouve dans un dossier personnel.
-- **Environnement de l'application :** il est entièrement reconstruit et rien n'est hérité,
-  sauf `PATH`.
-  - `HOME`, tous les `XDG_*_HOME`, `XDG_RUNTIME_DIR` et `TMPDIR` pointent dans ce dossier.
-  - La corbeille KIO est donc `XDG_DATA_HOME/Trash`, elle aussi jetable.
-- **Affichage et bus :**
-  - Xvfb choisit lui-même un numéro d'affichage libre (`-displayfd`), sans TCP, avec un
-    cookie MIT-MAGIC-COOKIE propre à la session.
-  - Un `dbus-daemon --session` privé écoute dans le dossier jetable.
-- **Aucun secret** COPR ou Pacman n'est lu. Le job CI n'a que `contents: read`.
-- **Contrôle des dossiers personnels :** des chemins sensibles des dossiers personnels sont
-  photographiés avant et après le scénario : préférences Mirivue, `kiorc`, corbeille, Places,
-  journaux. En CI, tout le `HOME` du job est surveillé (`--surveiller "$HOME"`).
-  Toute modification donne le code 3.
+TestLab combine deux mécanismes différents. Il ne faut pas les confondre.
+
+**1. Isolation d'environnement (toujours active).**
+- L'environnement de l'application est entièrement reconstruit : seul `PATH` est hérité.
+- `HOME`, tous les `XDG_*_HOME`, `XDG_RUNTIME_DIR` et `TMPDIR` pointent dans un dossier
+  `mirivue-testlab-*`, créé sous `MIRIVUE_TESTLAB_TMP` (par défaut `/tmp`). Ce dossier est
+  refusé s'il se trouve dans un dossier personnel.
+- La corbeille KIO est donc `XDG_DATA_HOME/Trash`, elle aussi jetable.
+- Xvfb choisit lui-même un numéro d'affichage libre (`-displayfd`), sans TCP, avec un cookie
+  propre à la session. Un `dbus-daemon --session` privé écoute dans le dossier jetable.
+
+Cela redirige un programme qui respecte ces variables. **Cela n'empêche pas** un processus
+d'écrire ailleurs avec ses propres droits : par exemple via `getpwuid()`, un chemin absolu ou
+un volume monté.
+
+**2. Confinement du système de fichiers (choisi automatiquement, indiqué dans le rapport).**
+
+| Mode | Quand | Effet |
+|---|---|---|
+| `uid` | Harness lancé en root (conteneur CI) | L'application et son bus tournent sous un compte non privilégié dédié (`MIRIVUE_TESTLAB_USER`), sans dossier personnel ni groupe. Ce compte ne possède que le dossier jetable : il ne peut écrire ni dans le `HOME` du job, ni dans l'espace de travail, ni dans le système. Le compte est refusé s'il exécute déjà un processus. |
+| `bwrap` | Utilisateur ordinaire avec bubblewrap | Système monté en lecture seule. Les dossiers personnels et `/run/user/<uid>` (vrai bus de session, socket Wayland) sont masqués par des tmpfs vides. Le réseau est privé et seul le dossier jetable est inscriptible. |
+| `aucun` | Ni root avec compte dédié, ni bubblewrap | Isolation d'environnement seule. Refusé quand `--exiger-confinement` ou `MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1` est actif, ce qui est le cas en CI. |
+
+En root, le harness **refuse** de lancer l'application sans compte dédié.
+
+**3. Surveillance (détection, pas protection).** Des chemins sensibles des dossiers
+personnels sont photographiés avant et après le scénario : préférences Mirivue, `kiorc`,
+corbeille, Places et journaux. En CI, tout le `HOME` du job est surveillé
+(`--surveiller "$HOME"`). Toute modification donne le code 3.
+
+La comparaison ne porte que sur les chemins choisis, sur trois niveaux et au plus 20 000
+entrées : elle peut révéler une écriture, elle ne peut pas prouver son absence.
+
+**Limites de sécurité.**
+- Le mode `uid` laisse le compte de test lire ce que le système rend lisible par tous.
+- Le mode `bwrap` partage le noyau, les sockets abstraites X11 de l'hôte (sans leurs cookies)
+  et les processus visibles.
+- Aucun des deux ne protège contre une faille du noyau ou de Xvfb.
+
+Une PR non fiable ne doit donc être exécutée **qu'en CI GitHub ou dans une VM ou un conteneur
+jetable** qui ne monte aucun dossier personnel, jamais dans la session du propriétaire.
+Aucun secret COPR ou Pacman n'est lu, et le job CI n'a que `contents: read`.
 
 ### Délais et nettoyage
 
@@ -89,9 +118,27 @@ boîte modale.
 
   Les journaux de Mirivue (`XDG_STATE_HOME/mirivue`) sont copiés avant la suppression.
 
+  Les processus de l'exécution sont reconnus à leur marqueur d'environnement, ou, en
+  mode `uid`, à leur compte dédié : dans un conteneur, root ne peut pas lire l'environnement
+  d'un autre UID sans CAP_SYS_PTRACE.
+- **Panne du nettoyage lui-même :**
+  - chaque étape s'exécute même si la précédente a échoué, et chaque erreur est inscrite
+    dans `nettoyage.erreurs` ;
+  - le code devient 3, mais le statut et l'erreur initiale du scénario sont conservés ;
+  - les rapports JSON et JUnit sont écrits dans tous les cas. Si l'écriture elle-même échoue,
+    le rapport complet est imprimé sur la sortie d'erreur et le code reste non nul.
+- **Verrou X11 :** il n'est supprimé que si notre Xvfb s'est arrêté, que le verrou porte encore
+  son PID, que ce PID n'est plus actif, que le fichier appartient à l'utilisateur courant et
+  qu'il n'a pas été remplacé entre-temps (même inode, lien symbolique jamais suivi).
+
 ### Rapports et codes de sortie
 
-`<artefacts>/rapport.json` (étapes, durées, captures, nettoyage, isolation),
+`<artefacts>/rapport.json` : étapes, durées, captures, nettoyage, isolation, mode de confinement
+et `couverture` (`x11_xvfb : couvert`, `wayland`, `kwin`, `plasma` et `glisser_deposer :
+non couvert`). Ces rapports sont prévus pour être lus par un relecteur humain ou par
+ChatGPT afin d'analyser un échec.
+
+Autres fichiers :
 `junit.xml`, `captures/*.png`, `journaux/*.log` (Xvfb, D-Bus, Mirivue, harness).
 
 | Code | Signification |
@@ -104,16 +151,18 @@ boîte modale.
 ### Utilisation
 
 ```bash
-# Dans un conteneur ou une VM Fedora 45 où le RPM testé est installé :
-dnf -y install python3 xorg-x11-server-Xvfb xdotool xwd xclip dbus-daemon
+# CI ou conteneur jetable Fedora 45, en root, avec le RPM testé installé :
+dnf -y install python3 xorg-x11-server-Xvfb xdotool xwd xclip dbus-daemon shadow-utils
+useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-testlab
+export MIRIVUE_TESTLAB_USER=mirivue-testlab MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1
 python3 tests/testlab/run.py nouveau-dossier --artefacts /tmp/testlab-resultats
 MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 python3 -m unittest discover -s tests -p test_testlab_harness.py -v
 ```
 
-Le harness peut tourner sur un poste de développement : il n'y touche ni au `HOME`,
-ni à la session graphique. Pour les PR non fiables, il faut toutefois l'exécuter
-uniquement en CI ou dans un conteneur jetable (par exemple `podman run --rm` avec le
-dépôt monté en lecture seule), jamais dans la session personnelle.
+Sur un poste de développement, en utilisateur ordinaire, le mode `bwrap` est choisi
+automatiquement si bubblewrap fonctionne. Les PR non fiables restent réservées à la CI ou à
+une VM ou un conteneur jetable (par exemple `podman run --rm`, avec le dépôt monté en
+lecture seule et sans `HOME` monté).
 
 ## Scénario de référence : `nouveau-dossier`
 
@@ -137,25 +186,44 @@ reprennent aucun essai historique.
 échouer avec le code 1, une capture `echec.png`, la liste des fenêtres, les journaux et un
 nettoyage vérifié. `test_testlab_harness.py` l'exécute à chaque PR.
 
-## Intégration CI
+## Intégration CI et contrôles bloquants
 
 Le job `testlab` de `fedora-package.yml` :
 - dépend du job RPM Fedora 45 et installe **le RPM produit par ce même commit** ;
-- exécute les tests du harness avec `MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1`, où un outil absent
-  est un échec et non un saut ;
-- exécute le scénario `nouveau-dossier` et publie `testlab-fedora-45` (rapports, captures
-  et journaux, conservés 14 jours), même en cas d'échec.
+- crée le compte dédié `mirivue-testlab` et exige l'affichage et le confinement
+  (`MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1` et `MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1`) : un outil
+  absent est un échec, et non un saut ;
+- exécute les tests du harness, puis **trois fois** le scénario `nouveau-dossier`, pour suivre
+  la stabilité du focus sous Xvfb sans gestionnaire de fenêtres ;
+- publie `testlab-fedora-45` (rapports, captures et journaux, conservés 14 jours), même en
+  cas d'échec.
 
-Un échec rend le job rouge. Le job de publication COPR et ses conditions (lancement manuel
-sur `main`, confirmation `PUBLIER`, environnement protégé) sont **inchangés**. Une CI verte
-n'est jamais une autorisation de publier.
+**Publication COPR.** `publish.needs` vaut `[rpm, python, testlab]`.
+- Un TestLab en échec, annulé ou ignoré empêche donc la publication.
+- La condition de publication ne contient aucune fonction de statut (`always()`, etc.) :
+  GitHub applique `success()` à chaque job requis.
+- Les exigences d'autorisation restent inchangées : lancement manuel sur `main`,
+  confirmation `PUBLIER`, puis approbation dans l'environnement protégé `publication-copr`.
+- `tests/test_publication_controlee.py` vérifie ces trois points.
 
-Durées mesurées dans un conteneur Fedora 45 local :
-- scénario `nouveau-dossier` : environ 10 s ;
-- tests du harness : environ 45 s.
+**Fusion dans `main`.** Les workflows seuls n'empêchent pas une fusion. Il faut une règle
+GitHub. `packaging/protection-main.py` vérifie (`--verifier`, lecture seule) ou crée
+(`--appliquer`, réservé au propriétaire) le ruleset « Mirivue — contrôles obligatoires ». Il impose :
+- une pull request ;
+- les contrôles `RPM KDE Fedora 44`, `RPM KDE Fedora 45`, `Python 3.11 — imports et fichiers`,
+  `Python 3.x — imports et fichiers`, `TestLab — vraie fenêtre sous Xvfb (Fedora 45)` et `build`
+  (Arch), tous émis par GitHub Actions ;
+- une branche à jour ;
+- ni suppression, ni réécriture de `main` ;
+- aucun contournement.
 
-Le job complet ajoute surtout l'installation des paquets ; les durées CI réelles sont
-indiquées dans la PR.
+`tests/test_protection_main.py` vérifie que ces noms correspondent aux vrais jobs.
+**Tant que ce ruleset n'est pas appliqué, le TestLab ne bloque que la publication COPR, pas
+la fusion.** Une CI verte n'est jamais une autorisation de publier.
+
+Durées mesurées (exécution CI 42464579875, première version) : job complet en 2 min 14 s après
+le RPM Fedora 45, tests du harness en 47 s et scénario en 11,8 s. Les durées de la version
+actuelle figurent dans la PR.
 
 ## Limites connues de la tranche Xvfb
 
@@ -179,19 +247,19 @@ Elles ne sont pas corrigées dans cette PR, qui se limite au banc de tests :
 
 ## Suite proposée
 
-1. **Plasma/Wayland en VM éphémère :**
-   - Fedora KDE 45 démarrée depuis une image, sans connexion SSH à un poste personnel,
-     détruite après chaque exécution ;
-   - même harness, avec un pilote d'entrée Wayland (`kwin_wayland --virtual` ou
-     `ydotool`/libei) et des captures par `spectacle` ou un portail ;
-   - un runner auto-hébergé n'est acceptable que s'il est isolé, éphémère et n'exécute
-     pas les PR de forks.
-2. **Étape intermédiaire évaluable en CI :** `kwin_wayland --virtual` dans le conteneur
-   Fedora donne un vrai KWin Wayland sans matériel.
+1. **Wayland natif (PR distincte) :** KWin avec son backend virtuel dans le conteneur
+   Fedora, l'application en `QT_QPA_PLATFORM=wayland` sans XWayland, et une saisie et des
+   captures sans xdotool. Voir `docs/TESTLAB-WAYLAND.md` sur sa branche. Ce n'est pas une
+   session Plasma complète.
+2. **Plasma Wayland en VM éphémère :** Fedora KDE 45 démarrée depuis une image, sans
+   connexion SSH à un poste personnel, détruite après chaque exécution, avec le même format
+   de rapports. Un runner auto-hébergé n'est acceptable que s'il est isolé, éphémère et
+   n'exécute pas les PR de forks.
 3. **Variantes séparées :** NTFS en image loop, SFTP vers un `sshd` local jetable et SMB,
    chacune avec ses propres scénarios. Elles ne sont jamais supposées couvertes par Xvfb.
 4. **Arch/CachyOS :** même harness dans un conteneur `archlinux` avec le paquet construit
    par `arch-package.yml`.
+5. **Suites `*_gui` restantes :** les qualifier une par une avant de les ajouter à la CI.
 
 ## Contrat de validation d'une future PR
 
@@ -216,10 +284,12 @@ preuve.
 ## Sécurité non négociable
 
 - Ne jamais exécuter une PR non fiable sur la session personnelle du propriétaire.
-- Aucun accès au `$HOME` réel, à la vraie corbeille, aux disques personnels ou aux
-  secrets de signature/COPR dans les tests.
+- Les tests n'utilisent ni le `$HOME` réel, ni la vraie corbeille, ni les disques
+  personnels, ni les secrets de signature ou COPR. Cette garantie repose sur le confinement
+  (`uid` ou `bwrap`) et sur l'exécution en CI ou dans une VM jetable, pas sur la seule
+  substitution des variables.
 - Aucun service SSH permanent ni runner auto-hébergé non isolé.
-- Les jobs de publication COPR, Arch et Pacman restent inchangés.
+- Les conditions d'autorisation des jobs de publication COPR, Arch et Pacman sont inchangées.
 - Les captures et journaux ne contiennent que des chemins jetables (`/tmp/mirivue-testlab-*`).
 
 Suivi du chantier : [issue n° 8](https://github.com/denamiel/Mirivue-kde/issues/8).

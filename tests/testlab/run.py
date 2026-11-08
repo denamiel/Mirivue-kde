@@ -35,6 +35,12 @@ def main(arguments=None):
     parser.add_argument('--artefacts', required=True, type=Path)
     parser.add_argument('--application', choices=('installee', 'sources'), default='installee')
     parser.add_argument('--delai', type=float, default=180.0, help='délai maximal du scénario (s)')
+    parser.add_argument('--utilisateur', default=os.environ.get('MIRIVUE_TESTLAB_USER'),
+                        help='compte non privilégié qui exécute l’application quand le harness est root')
+    parser.add_argument('--confinement', choices=('auto', 'uid', 'bwrap', 'aucun'), default='auto')
+    parser.add_argument('--exiger-confinement', action='store_true',
+                        default=os.environ.get('MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT') == '1',
+                        help='refuser de tourner sans confinement du système de fichiers')
     parser.add_argument('--surveiller', action='append', type=Path, default=None,
                         help='chemin supplémentaire qui doit rester inchangé (répétable)')
     options = parser.parse_args(arguments)
@@ -42,7 +48,8 @@ def main(arguments=None):
         parser.error(f'le dossier d’artefacts doit être vide : {options.artefacts}')
     command, cwd, extra = application_command(options.application)
     lab = Lab(options.scenario, options.artefacts, app=command, timeout=options.delai,
-              launch_cwd=cwd, extra_environment=extra)
+              launch_cwd=cwd, extra_environment=extra, user=options.utilisateur,
+              confinement=options.confinement, require_confinement=options.exiger_confinement)
     if options.surveiller:
         lab.watch += [str(path.resolve()) for path in options.surveiller]
 
