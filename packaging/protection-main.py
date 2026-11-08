@@ -4,8 +4,9 @@
 """Règle GitHub (ruleset) qui rend les tests obligatoires avant toute intégration dans main.
 
   protection-main.py --verifier   lecture seule ; code 1 si la règle manque ou diffère
-  protection-main.py --appliquer  crée ou met à jour uniquement la règle nommée
-                                  « Mirivue — contrôles obligatoires »
+  protection-main.py --appliquer  crée la règle « Mirivue — contrôles obligatoires »
+                                  seulement si elle est absente ET si chaque contrôle
+                                  requis a réussi sur le dernier commit de main
 
 Règle attendue sur la branche par défaut (main) :
   - passage obligatoire par une pull request (aucune approbation exigée : mainteneur unique) ;
@@ -13,9 +14,15 @@ Règle attendue sur la branche par défaut (main) :
   - ni suppression de main, ni réécriture de son historique ;
   - aucun contournement, y compris pour les administrateurs.
 
-Les autres rulesets ne sont jamais modifiés ni supprimés. La publication reste
-séparée : elle exige toujours un lancement manuel, la confirmation PUBLIER et
-l'approbation dans l'environnement protégé.
+Sécurité : --appliquer ne remplace, ne modifie et ne supprime jamais une règle
+existante. Si une règle du même nom existe et diffère, même par un paramètre
+inconnu ou une contrainte plus stricte, il affiche chaque différence et refuse
+d'agir : la correction se fait à la main dans Settings > Rules. Il refuse aussi
+d'exiger un contrôle que main ne produit pas encore (TestLab avant la fusion de
+la PR qui l'ajoute), ce qui bloquerait toutes les fusions.
+
+Ordre d'intégration : fusionner la PR qui introduit les contrôles, vérifier
+qu'ils réussissent sur main, puis seulement appliquer la règle.
 """
 import json
 import subprocess
@@ -33,6 +40,8 @@ REQUIRED_CHECKS = (
     'TestLab — vraie fenêtre sous Xvfb (Fedora 45)',
     'build',
 )
+# Jobs reported on every PR but deliberately not required (none yet).
+INFORMATIVE_CHECKS = ()
 
 
 def expected_ruleset():
@@ -61,32 +70,78 @@ def expected_ruleset():
     }
 
 
+def normalise(ruleset):
+    """Keep every rule and every parameter, in a comparable order."""
+    rules = {}
+    for rule in ruleset.get('rules', []):
+        parameters = dict(rule.get('parameters') or {})
+        checks = parameters.get('required_status_checks')
+        if isinstance(checks, list):
+            parameters['required_status_checks'] = sorted(
+                checks, key=lambda item: (str(item.get('context')), str(item.get('integration_id'))))
+        rules.setdefault(str(rule.get('type')), []).append(parameters)
+    return {
+        'target': ruleset.get('target'),
+        'enforcement': ruleset.get('enforcement'),
+        'conditions': ruleset.get('conditions'),
+        'bypass_actors': ruleset.get('bypass_actors') or [],
+        'rules': rules,
+    }
+
+
+def dump(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def differences(ruleset):
+    """Every field-by-field difference between an existing ruleset and the expected one."""
+    actual, expected = normalise(ruleset), normalise(expected_ruleset())
+    found = []
+    for key in ('target', 'enforcement', 'conditions', 'bypass_actors'):
+        if actual[key] != expected[key]:
+            found.append(f'{key} : actuel {dump(actual[key])} ; attendu {dump(expected[key])}')
+    for kind in sorted(set(actual['rules']) | set(expected['rules'])):
+        have, want = actual['rules'].get(kind), expected['rules'].get(kind)
+        if want is None:
+            found.append(f'règle supplémentaire {kind} : {dump(have)}')
+        elif have is None:
+            found.append(f'règle {kind} absente')
+        elif len(have) != 1:
+            found.append(f'règle {kind} présente {len(have)} fois')
+        elif have[0] != want[0]:
+            for name in sorted(set(have[0]) | set(want[0])):
+                if have[0].get(name) != want[0].get(name):
+                    found.append(f'{kind}.{name} : actuel {dump(have[0].get(name))} ; attendu {dump(want[0].get(name))}')
+    return found
+
+
 def analyse(ruleset):
-    """Return the differences between a ruleset (GET JSON, or None) and the expected rule."""
+    """Problems of a ruleset (GET JSON, or None) against the expected rule."""
     if ruleset is None:
         return ['règle absente : main n’exige aucun contrôle']
-    problems = []
-    if ruleset.get('enforcement') != 'active':
-        problems.append(f"règle non appliquée (enforcement={ruleset.get('enforcement')})")
-    if ruleset.get('target') != 'branch' or '~DEFAULT_BRANCH' not in (
-            ruleset.get('conditions', {}).get('ref_name', {}).get('include', [])):
-        problems.append('règle non ciblée sur la branche par défaut')
-    if ruleset.get('bypass_actors'):
-        problems.append('contournement autorisé : ' + ', '.join(
-            f"{actor.get('actor_type')} {actor.get('actor_id')}" for actor in ruleset['bypass_actors']))
-    rules = {rule.get('type'): rule.get('parameters', {}) for rule in ruleset.get('rules', [])}
-    for kind in ('deletion', 'non_fast_forward', 'pull_request', 'required_status_checks'):
-        if kind not in rules:
-            problems.append(f'règle {kind} absente')
-    checks = rules.get('required_status_checks', {})
-    present = {(item.get('context'), item.get('integration_id'))
-               for item in checks.get('required_status_checks', [])}
-    missing = [name for name in REQUIRED_CHECKS if (name, GITHUB_ACTIONS_APP) not in present]
+    return differences(ruleset)
+
+
+def missing_checks_on_main(check_runs):
+    """Required contexts without a successful GitHub Actions run on main's head commit."""
+    succeeded = {run.get('name') for run in check_runs
+                 if (run.get('app') or {}).get('id') == GITHUB_ACTIONS_APP and run.get('conclusion') == 'success'}
+    return [name for name in REQUIRED_CHECKS if name not in succeeded]
+
+
+def decide(ruleset, check_runs):
+    """What --appliquer may do: ('rien' | 'creer' | 'refuser', messages)."""
+    problems = analyse(ruleset)
+    if not problems:
+        return 'rien', []
+    if ruleset is not None:
+        return 'refuser', ['une règle du même nom existe et diffère ; elle ne sera ni remplacée ni modifiée :',
+                           *problems]
+    missing = missing_checks_on_main(check_runs)
     if missing:
-        problems.append('contrôles obligatoires manquants : ' + ', '.join(missing))
-    if 'required_status_checks' in rules and not checks.get('strict_required_status_checks_policy'):
-        problems.append('branche à jour non exigée avant fusion')
-    return problems
+        return 'refuser', ['contrôles requis jamais réussis sur le dernier commit de main ; fusionner d’abord la '
+                           'PR qui les introduit et vérifier la CI de main : ' + ', '.join(missing)]
+    return 'creer', problems
 
 
 def gh(*arguments, body=None):
@@ -98,10 +153,15 @@ def gh(*arguments, body=None):
 
 
 def find():
-    for summary in gh(f'repos/{REPOSITORY}/rulesets?includes_parents=false') or []:
-        if summary.get('name') == NAME:
-            return gh(f"repos/{REPOSITORY}/rulesets/{summary['id']}")
-    return None
+    matches = [summary for summary in gh(f'repos/{REPOSITORY}/rulesets?includes_parents=false') or []
+               if summary.get('name') == NAME]
+    if len(matches) > 1:
+        raise LookupError(f'{len(matches)} règles portent le nom « {NAME} » ; corrigez-les à la main.')
+    return gh(f"repos/{REPOSITORY}/rulesets/{matches[0]['id']}") if matches else None
+
+
+def main_check_runs():
+    return (gh(f'repos/{REPOSITORY}/commits/main/check-runs?per_page=100') or {}).get('check_runs', [])
 
 
 def main(argv):
@@ -109,23 +169,34 @@ def main(argv):
         print(__doc__.split('\n\n')[1], file=sys.stderr)
         return 2
     try:
-        ruleset = find()
+        ruleset, check_runs = find(), main_check_runs()
     except (LookupError, OSError) as error:
         print(f'Lecture impossible ({error}) ; rien n’a été modifié.', file=sys.stderr)
         return 2
-    problems = analyse(ruleset)
-    if problems and argv[1] == '--appliquer':
-        if ruleset is None:
-            gh('-X', 'POST', f'repos/{REPOSITORY}/rulesets', '--input', '-', body=expected_ruleset())
-        else:
-            gh('-X', 'PUT', f"repos/{REPOSITORY}/rulesets/{ruleset['id']}", '--input', '-', body=expected_ruleset())
-        problems = analyse(find())
-    if not problems:
-        print(f'✔ {REPOSITORY} / main : {len(REQUIRED_CHECKS)} contrôles obligatoires, pull request exigée, '
-              'aucun contournement')
+    missing = missing_checks_on_main(check_runs)
+    if missing:
+        print('ℹ contrôles requis sans réussite sur le dernier commit de main : ' + ', '.join(missing))
+    if argv[1] == '--verifier':
+        problems = analyse(ruleset)
+        if not problems:
+            print(f'✔ {REPOSITORY} / main : règle conforme ({len(REQUIRED_CHECKS)} contrôles obligatoires)')
+            return 0
+        print(f'✖ {REPOSITORY} / main :\n  ' + '\n  '.join(problems))
+        return 1
+    action, messages = decide(ruleset, check_runs)
+    if action == 'rien':
+        print(f'✔ {REPOSITORY} / main : règle déjà conforme ; rien n’a été modifié')
         return 0
-    print(f"✖ {REPOSITORY} / main : {' ; '.join(problems)}")
-    return 1
+    if action == 'refuser':
+        print('✖ Refus :\n  ' + '\n  '.join(messages) + '\n  Rien n’a été modifié.')
+        return 1
+    gh('-X', 'POST', f'repos/{REPOSITORY}/rulesets', '--input', '-', body=expected_ruleset())
+    problems = analyse(find())
+    if problems:
+        print('✖ Règle créée mais différente de l’attendu :\n  ' + '\n  '.join(problems))
+        return 1
+    print(f'✔ {REPOSITORY} / main : règle créée ({len(REQUIRED_CHECKS)} contrôles obligatoires)')
+    return 0
 
 
 if __name__ == '__main__':

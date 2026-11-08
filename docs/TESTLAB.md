@@ -99,6 +99,9 @@ entrées : elle peut révéler une écriture, elle ne peut pas prouver son absen
 
 Une PR non fiable ne doit donc être exécutée **qu'en CI GitHub ou dans une VM ou un conteneur
 jetable** qui ne monte aucun dossier personnel, jamais dans la session du propriétaire.
+Les tests de confinement démontrent le comportement du compte dédié et de bubblewrap. Ils ne
+constituent pas une frontière de sécurité système complète : hors d'un conteneur ou d'une VM
+jetable, aucune absence de risque n'est promise.
 Aucun secret COPR ou Pacman n'est lu, et le job CI n'a que `contents: read`.
 
 ### Délais et nettoyage
@@ -222,6 +225,29 @@ GitHub. `packaging/protection-main.py` vérifie (`--verifier`, lecture seule) ou
 `tests/test_protection_main.py` vérifie que ces noms correspondent aux vrais jobs.
 **Tant que ce ruleset n'est pas appliqué, le TestLab ne bloque que la publication COPR, pas
 la fusion.** Une CI verte n'est jamais une autorisation de publier.
+
+**Sécurité de `protection-main.py`.**
+- `--verifier` ne fait que lire.
+- `--appliquer` :
+  - **ne remplace, ne modifie et ne supprime jamais** une règle existante. Il ne contient
+    aucun appel `PUT`, `PATCH` ou `DELETE` ;
+  - quand une règle du même nom diffère, même par un paramètre inconnu ou une contrainte plus
+    stricte, il affiche chaque différence et refuse d'agir ;
+  - refuse de créer la règle tant qu'un contrôle requis n'a pas réussi sur le dernier commit
+    de `main`. Il éviterait ainsi d'exiger un contrôle que `main` ne produit pas encore, ce
+    qui bloquerait toutes les fusions.
+
+**Ordre d'intégration (décisions du propriétaire).**
+1. Fusionner la PR n° 9 (TestLab X11), qui introduit le contrôle TestLab.
+2. Vérifier que tous les contrôles requis réussissent sur `main` après la fusion :
+   `protection-main.py --verifier` n'affiche alors plus de contrôle manquant.
+3. Recibler la PR n° 10 (Wayland) sur `main`, la mettre à jour et refaire tourner **toute** sa CI.
+4. Appliquer la règle (`--appliquer`), puis la relire dans Settings > Rules.
+   La PR n° 10 y sera soumise : ses contrôles devront être verts sur une branche à jour.
+5. Fusionner la PR n° 10 seulement après sa propre revue et sa CI complète.
+
+La publication COPR reste soumise à son propre garde-fou : une version égale ou inférieure à
+celle déjà publiée (Epoch:Version-Release) est refusée, même après des tests verts.
 
 Durées mesurées (exécution CI 42464579875, première version) : job complet en 2 min 14 s après
 le RPM Fedora 45, tests du harness en 47 s et scénario en 11,8 s. Les durées de la version
