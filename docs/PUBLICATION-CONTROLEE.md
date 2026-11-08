@@ -1,15 +1,19 @@
 # Publication contrôlée de Mirivue KDE
 
 **Principe :** valider le code et publier des paquets sont deux décisions
-distinctes. Une fusion dans `main`, une CI verte, un tag ou un push ne publient
-jamais rien. Chaque publication exige trois conditions réunies :
+distinctes. Une fusion dans `main`, une CI verte, un tag, une release GitHub ou
+un push ne publient jamais rien. **Chaque** publication (COPR, paquets Arch
+joints à une release, dépôt Pacman) exige trois conditions réunies :
 
 1. un lancement **manuel** du workflow sur `main` ;
 2. la confirmation tapée `PUBLIER` ;
 3. l’**approbation** du mainteneur dans un environnement GitHub protégé.
 
-Un garde-fou refuse en outre de publier dans COPR une révision RPM inchangée,
-pour ne jamais distribuer deux contenus différents sous le même numéro.
+COPR refuse en outre toute révision RPM **égale ou inférieure** à celle déjà
+publiée (comparaison `Epoch:Version-Release` identique à `rpmvercmp`).
+Les paquets Arch ne sont joints qu’à une release dont le tag désigne exactement
+le commit construit, sans jamais remplacer un fichier déjà joint.
+`tests/test_publication_controlee.py` vérifie ces règles à chaque CI.
 
 ## Pourquoi
 
@@ -22,28 +26,35 @@ porte le **même numéro** que la build précédente (`1.0.0-0.200.beta5.3`) :
 (`denamiel/mirivue-arch`) publie lui aussi automatiquement, chaque heure, les
 commits validés de `main` lorsque sa variable `PUBLISH_ENABLED` vaut `true`.
 
-## Réglages GitHub à créer avant la première publication
+## Environnements GitHub : à créer avant la fusion
 
-Sans protection, GitHub crée un environnement inconnu **sans approbation** au
-premier usage. Créer donc d’abord, dans *Settings → Environments* de chaque
-dépôt, avec *Required reviewers* = le mainteneur et *Deployment branches* =
-`main` seulement :
+Un environnement absent ne protège rien : GitHub le crée sans aucune règle au
+premier usage. Les trois environnements doivent donc exister **avant** la
+fusion des workflows qui les utilisent :
 
 | Dépôt | Environnement | Protège |
 |---|---|---|
 | `denamiel/Mirivue-kde` | `publication-copr` | avance de la branche `publication` (COPR) |
-| `denamiel/Mirivue-kde` | `publication-arch` | ajout des paquets Arch à une release |
+| `denamiel/Mirivue-kde` | `publication-arch` | paquets Arch joints à une release |
 | `denamiel/mirivue-arch` | `publication-pacman` | publication du dépôt Pacman signé |
 
-En ligne de commande, pour un environnement :
+Règles : approbation obligatoire du mainteneur, déploiement limité à `main`,
+aucun délai. Tous les jobs de publication s’exécutent sur `main`
+(`workflow_dispatch`), y compris les paquets Arch : la règle « `main` seulement »
+convient donc aux trois.
+
+**`Prevent self-review`** reste désactivé : avec un seul mainteneur, celui qui
+lance la publication doit pouvoir l’approuver, sinon aucune publication n’est
+possible. L’approbation reste une seconde action explicite, distincte du
+lancement et de la saisie `PUBLIER`.
+
+**Limite.** Ces protections empêchent toute publication automatique ou
+accidentelle. Elles ne protègent pas contre une personne ou un outil disposant
+du jeton GitHub du mainteneur, qui pourrait lancer et approuver lui-même.
 
 ```bash
-id=$(gh api user --jq .id)
-gh api -X PUT repos/denamiel/Mirivue-kde/environments/publication-copr --input - <<EOF
-{"reviewers":[{"type":"User","id":$id}],
- "deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
-EOF
-gh api -X POST repos/denamiel/Mirivue-kde/environments/publication-copr/deployment-branch-policies -f name=main
+packaging/environnements-publication.sh --verifier    # lecture seule
+packaging/environnements-publication.sh --appliquer   # crée ou corrige les trois environnements
 ```
 
 ## Publier dans COPR
@@ -58,62 +69,38 @@ gh api -X POST repos/denamiel/Mirivue-kde/environments/publication-copr/deployme
 3. Après les contrôles RPM et Python, approuver le déploiement
    `publication-copr` sur la page de l’exécution.
 4. Le job vérifie que le commit est toujours la tête de `main`, qu’il descend de
-   `publication` et que la révision RPM a changé, puis avance `publication`.
+   `publication` et que sa révision RPM est strictement supérieure
+   (`packaging/fedora/verifier-revision-publication.py`), puis avance `publication`.
 5. Contrôler ensuite la build COPR et son numéro, sans le supposer.
 
-## Paquets Arch dans une release
+## Paquets Arch joints à une release
 
-La création d’une release reste un acte manuel. L’ajout des paquets Arch à la
-release attend en plus l’approbation de `publication-arch`.
+Une release ou un tag ne déclenchent plus rien. Après avoir créé la release sur
+le commit de `main` à distribuer :
 
-## Dépôt Pacman (`denamiel/mirivue-arch`) — proposition, non appliquée
+```bash
+gh workflow run arch-package.yml --repo denamiel/Mirivue-kde --ref main \
+  -f publier_arch=PUBLIER -f tag=v1.0.0-beta.6
+```
 
-Ce dépôt de distribution n’est pas modifié par ce travail.
+Le paquet est reconstruit sur ce commit ; après approbation de
+`publication-arch`, le job vérifie que le tag désigne ce commit, puis joint les
+fichiers sans remplacer ceux qui existent déjà.
 
-**Mesure immédiate possible**, réversible, à décider par le mainteneur :
+## Dépôt Pacman (`denamiel/mirivue-arch`)
+
+La modification correspondante est préparée sur la branche
+`controle/publication-explicite` de ce dépôt (pull request distincte, non
+fusionnée) : les exécutions planifiées et les push ne font plus que construire ;
+la publication exige un lancement manuel, la saisie `PUBLIER`,
+`PUBLISH_ENABLED=true` et l’approbation de `publication-pacman`.
+
+Tant qu’elle n’est pas fusionnée, le dépôt publie encore chaque heure les commits
+validés de `main` (`PUBLISH_ENABLED=true` constaté le 8 novembre 2026). Mesure
+immédiate et réversible, à décider par le mainteneur :
 
 ```bash
 gh variable set PUBLISH_ENABLED --body false --repo denamiel/mirivue-arch
-```
-
-Les exécutions planifiées continuent alors de construire et valider, sans
-publier.
-
-**Modification proposée** de `.github/workflows/repository.yml`. Les exécutions
-planifiées et les push ne font plus que construire ; la publication exige un
-lancement manuel, la saisie `PUBLIER`, `PUBLISH_ENABLED=true` et l’approbation
-de `publication-pacman` :
-
-```diff
-       force_rebuild:
-         description: Reconstruire même sans nouvelle version (incrémente pkgrel)
-         type: boolean
-         default: false
-+      publier:
-+        description: Pour publier le dépôt signé, taper exactement PUBLIER
-+        required: false
-+        default: ''
-@@
-   publish:
-     name: Publier le dépôt avec la clé du propriétaire
-     needs: [plan, build, installation]
--    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.PUBLISH_ENABLED == 'true'
-+    # Les exécutions planifiées et les push valident et construisent seulement.
-+    # Publication : lancement manuel, confirmation tapée, environnement approuvé.
-+    if: >-
-+      github.ref == 'refs/heads/main'
-+      && github.event_name == 'workflow_dispatch'
-+      && inputs.publier == 'PUBLIER'
-+      && vars.PUBLISH_ENABLED == 'true'
-     runs-on: ubuntu-latest
-+    environment: publication-pacman
-     container: archlinux:base-devel
-```
-
-Publication ensuite :
-
-```bash
-gh workflow run repository.yml --repo denamiel/mirivue-arch --ref main -f publier=PUBLIER
 ```
 
 ## Vérifier ce qui est réellement publié

@@ -32,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -65,7 +65,7 @@ jobs:
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
       - name: Signaler une incompatibilité de développement
@@ -135,10 +135,8 @@ jobs:
             exit 0
           fi
           git merge-base --is-ancestor origin/publication "$TESTED_COMMIT"
-          # Never publish a different build under an already published NVR.
-          nvr() { git show "$1:packaging/fedora/mirivue-kde.spec" | sed -n 's/^\(Version\|Release\): *//p' | tr '\n' ' '; }
-          if [ "$(nvr origin/publication)" = "$(nvr "$TESTED_COMMIT")" ]; then
-            echo "Révision RPM inchangée ($(nvr "$TESTED_COMMIT")) : augmenter Release avant de publier." >&2
-            exit 1
-          fi
+          # Refuse an equal or lower RPM Epoch:Version-Release (rpmvercmp).
+          git show origin/publication:packaging/fedora/mirivue-kde.spec > "$RUNNER_TEMP/publie.spec"
+          git show "$TESTED_COMMIT:packaging/fedora/mirivue-kde.spec" > "$RUNNER_TEMP/candidat.spec"
+          python3 packaging/fedora/verifier-revision-publication.py "$RUNNER_TEMP/publie.spec" "$RUNNER_TEMP/candidat.spec"
           git push origin "$TESTED_COMMIT:refs/heads/publication"
