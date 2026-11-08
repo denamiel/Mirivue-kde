@@ -147,7 +147,8 @@ jobs:
           sudo modprobe vgem
           node=$(ls /dev/dri/renderD* | head -n 1)
           echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
-          stat -c 'hôte avant : %n %a %U:%G' "$node" | tee host-node-before.txt
+          # Outside the workspace: actions/checkout cleans it.
+          stat -c 'hôte : %n %a %U:%G' "$node" | tee "$RUNNER_TEMP/host-node-before.txt"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -187,9 +188,9 @@ jobs:
       - name: Le nœud de rendu de l’hôte est inchangé
         if: always()
         run: |
-          stat -c 'hôte avant : %n %a %U:%G' "$RENDER_NODE" > host-node-after.txt
-          cat host-node-after.txt
-          cmp host-node-before.txt host-node-after.txt
+          stat -c 'hôte : %n %a %U:%G' "$RENDER_NODE" > "$RUNNER_TEMP/host-node-after.txt"
+          cat "$RUNNER_TEMP/host-node-before.txt" "$RUNNER_TEMP/host-node-after.txt"
+          cmp "$RUNNER_TEMP/host-node-before.txt" "$RUNNER_TEMP/host-node-after.txt"
       - name: Résumé TestLab Wayland
         if: always()
         run: cat testlab-wayland-artefacts/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
