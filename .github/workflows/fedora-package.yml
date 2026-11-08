@@ -65,7 +65,7 @@ jobs:
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee protection_main; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
       - name: Signaler une incompatibilité de développement
@@ -77,6 +77,57 @@ jobs:
           name: rpm-kde-fedora-${{ matrix.fedora }}
           path: dist/rpms/x86_64/*.rpm
           if-no-files-found: error
+
+  testlab:
+    name: TestLab — vraie fenêtre sous Xvfb (Fedora 45)
+    # Starts the installed RPM in a disposable X11 session (Xvfb, private
+    # D-Bus, disposable HOME/XDG/Trash) as a dedicated unprivileged account.
+    # Mandatory before a COPR publication. It is not a Plasma Wayland validation.
+    needs: rpm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: fedora:45
+      # An init process reaps the processes that TestLab kills.
+      options: --init
+    permissions:
+      contents: read
+    env:
+      MIRIVUE_TESTLAB_USER: mirivue-testlab
+      MIRIVUE_TESTLAB_REQUIRE_DISPLAY: '1'
+      MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT: '1'
+    steps:
+      - name: Préparer la session graphique jetable et le compte de test
+        run: |
+          dnf -y install python3 xorg-x11-server-Xvfb xdotool xwd xclip dbus-daemon shadow-utils
+          # No home, no shell, no group membership: it owns only the disposable roots.
+          useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin "$MIRIVUE_TESTLAB_USER"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Installer le RPM testé
+        run: dnf -y --setopt=tsflags= install dist/rpms/*.rpm
+      - name: Tests du harness (succès, échec, délai, confinement, nettoyage)
+        run: timeout 600 python3 -m unittest discover -s tests -p test_testlab_harness.py -v
+      - name: Scénario de bout en bout — nouveau dossier au clavier (3 exécutions)
+        run: |
+          # The CI HOME stands in for a personal folder and must stay unchanged.
+          mkdir -p "$HOME/.config" "$HOME/.local/share"
+          for run in 1 2 3; do
+            timeout 300 python3 tests/testlab/run.py nouveau-dossier \
+              --artefacts "testlab-artefacts/nouveau-dossier-$run" --surveiller "$HOME"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testlab-fedora-45
+          path: testlab-artefacts
+          if-no-files-found: warn
+          retention-days: 14
 
   python:
     name: Python ${{ matrix.python }} — imports et fichiers
@@ -112,7 +163,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       && github.ref == 'refs/heads/main'
       && inputs.publier_copr == 'PUBLIER'
-    needs: [rpm, python]
+    # TestLab is mandatory: a failed graphical test blocks the publication.
+    needs: [rpm, python, testlab]
     runs-on: ubuntu-latest
     environment: publication-copr
     permissions:
