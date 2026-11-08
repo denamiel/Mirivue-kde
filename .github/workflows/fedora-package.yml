@@ -108,7 +108,7 @@ jobs:
         run: |
           # The CI HOME stands in for a personal folder and must stay unchanged.
           mkdir -p "$HOME/.config" "$HOME/.local/share"
-          timeout 300 python3 tests/testlab/run.py controle-echec --artefacts testlab-artefacts/controle-echec --surveiller "$HOME"
+          timeout 300 python3 tests/testlab/run.py nouveau-dossier --artefacts testlab-artefacts/nouveau-dossier --surveiller "$HOME"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
