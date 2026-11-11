@@ -1,80 +1,77 @@
-# Agent Claude Code heberge — preparation (non active)
+# Claude Code heberge — premiere phase : essai manuel en lecture seule
 
-Cette PR introduit un **prototype opt-in** reposant sur
-[Claude Code GitHub Action](https://github.com/anthropics/claude-code-action).
-Son objectif est de permettre a Claude de traiter les corrections du chantier
-TestLab depuis un runner GitHub **sans garder Konsole ouverte**.
+Suivi : [PR #16](https://github.com/denamiel/Mirivue-kde/pull/16).
 
-## Etat initial
+## Etat
 
-**NON ACTIF :** ce workflow est seulement propose sur une branche brouillon.
-Un workflow planifie ne s'execute sur GitHub qu'apres integration dans la
-branche par defaut. De plus, le job principal requiert
-`MIRIVUE_AGENT_ENABLED=true` ; tant que cette variable n'existe pas, il
-est ignore, meme en declenchement manuel.
+Le workflow `.github/workflows/claude-heberge.yml` a ete **restreint** :
+- seulement `workflow_dispatch`, aucun `schedule` et aucun evenement PR ;
+- seulement sur la branche `main`, via condition `github.ref` ;
+- `contents: read`, `pull-requests: read`, `issues: read`, `actions: read` ;
+- transmission explicite du `github.token` limite, a la place du jeton
+  d'installation de l'application Claude si celui-ci dispose de plus de droits ;
+- pas de commande shell autorisee a Claude ; uniquement `Read`, `Glob` et `Grep` ;
+- au plus cinq tours, duree d'execution maximale 15 minutes ;
+- diagnostic limite a la lecture de `README.md` et de
+  `docs/PUBLICATION-CONTROLEE.md` lorsqu'il existe ;
+- pas de push, pas de modification de fichier, aucun acces aux secrets dans
+  les sorties et aucun declenchement de publication.
 
-Le workflow ne vise **que** la PR brouillon #14, si elle est toujours ouverte
-sur la branche prevue et empilee sur #13. Il ne fusionne et ne publie rien.
+**Ce workflow ne developpe PAS Mirivue de maniere autonome.** Il sert
+uniquement a verifier que l'action Claude Code peut s'authentifier et
+s'executer de facon controlee sur un runner GitHub.
 
-## Activation : trois decisions du mainteneur
+## Activation de la premiere phase
 
-1. Lire et approuver la PR de configuration. Ne pas fusionner avant d'avoir
-   verifie la securite et les couts avec ChatGPT.
-2. Installer l'application officielle
-   [Claude GitHub](https://github.com/apps/claude) uniquement sur
-   `denamiel/Mirivue-kde` ; configurer dans
-   `Settings > Secrets and variables > Actions > Secrets` le secret
-   **`CLAUDE_CODE_OAUTH_TOKEN`**. Selon la formule Claude eligible,
-   generer ce jeton **en local** avec `claude setup-token` (ou utiliser
-   une cle API avec un workflow adapte apres validation du mode de facturation).
-   **Ne jamais le copier dans un chat, une issue, un commit ou un journal.**
-3. Apres la revue et la fusion de ce workflow sur `main`, creer
-   `Settings > Secrets and variables > Actions > Variables` :
-   `MIRIVUE_AGENT_ENABLED` avec valeur `true`.
-   Lancer d'abord un **workflow_dispatch** de demonstration, puis
-   examiner le resultat et les consommations avant de laisser agir
-   l'horaire automatique (05:17 UTC, une fois par jour).
+L'application Claude sur GitHub et le secret `CLAUDE_CODE_OAUTH_TOKEN`
+doivent etre configures exclusivement dans les parametres du depot.
+Ne jamais copier un secret dans une issue, une PR, un log ou un chat.
 
-Pour couper tout developpement heberge, mettre la variable a `false`
-ou desactiver le workflow depuis l'onglet Actions. Cela n'affecte ni
-les installations locales de Mirivue, ni la surveillance ChatGPT.
+1. La PR #16 passe une revue independante des changements, des droits
+   effectifs et du cout/usage Anthropic. Verifier aussi la version de l'action
+   et, si possible, l'epingler par SHA apres verification de la release.
+2. Le proprietaire donne explicitement son accord pour integrer ce workflow
+   non destructif dans `main`. Sans accord, la PR reste en brouillon.
+3. Sur la branche par defaut, le proprietaire peut executer manuellement
+   `Mirivue - Claude heberge (diagnostic manuel)` par
+   **Actions > workflow > Run workflow**, branche `main`.
+4. Examiner le premier run : authentification, logs sans secret, outils
+   disponibles, temps de calcul, cout, erreurs et absence de changements.
+   Un job rouge signifie **non valide**, pas une permission de supprimer
+   des protections.
 
-## Garanties et limites
+L'installation de l'application GitHub n'implique pas que le jeton OAuth
+sera accepte ou que son abonnement couvre l'execution hebergee.
 
-- Runner GitHub **heberge et jetable** ; `ubuntu-24.04` fixe pour eviter
-  une modification implicite de l'image.
-- Aucun declenchement par commentaire, PR externe ou push ; les instructions
-  et le code de la branche sont traites comme non fiables.
-- Concurrence de l'agent limitee a 1 execution, duree maximale 35 minutes,
-  au plus 12 tours Claude par execution.
-- Un controle de la PR #14 est effectue avant de recuperer sa branche.
-- Le job est ignore si la variable d'activation n'est pas a `true`.
-- L'agent peut **proposer et pousser des changements sur la PR #14** :
-  il recoit donc des droits d'ecriture sur le depot. Les prompts de securite
-  ne remplacent pas l'isolation, les rulesets, les protections et la revue.
-- **Aucun droit d'administrateur ou de publication n'est requis.**
-  La publication COPR/Pacman reste soumise aux protections existantes.
-- Les runs Claude utilisent un quota/facturation Anthropic distinct du
-  simple temps de runner ; le prix reel depend de la formule, du modele,
-  des jetons et des limites du compte. Envisager un budget ou une limite.
-- L'action officielle, ses dependances et l'authentification doivent etre
-  controles sur un premier run : **aucune execution reussie n'est encore
-  attestee** par cette proposition.
-- Apres fusion de #14, ce workflow cesse de traiter ce chantier :
-  il faudra definir et revoir un nouveau perimetre avant toute reprise.
-- La surveillance automatique ChatGPT, distincte, continue a revoir GitHub.
-  Elle ne remplace pas l'authentification Anthropic requise ici.
+## Deuxieme phase (NON IMPLEMENTEE)
 
-## Sources techniques
+Un agent qui modifie des fichiers et fonctionne a horaire defini implique
+des risques plus eleves : cout et usage Anthropic, droits GitHub, injection
+de prompts dans le code ou les commentaires, branches cibles, collisions
+avec les PR en cours. Son implementation devra etre proposee dans une
+**nouvelle PR separee**, apres succes et revue de l'essai manuel.
 
-- https://github.com/anthropics/claude-code-action/blob/main/docs/setup.md
+Avant toute mise en service, il faudra verifier :
+- un declenchement explicitement accepte et sa periodicite ;
+- un perimetre de fichiers et branches limite avec controles techniques ;
+- aucun secret de publication ni autorisation d'editer les protections ;
+- les interactions avec les PR #13/#14 et `CLAUDE.md` (#15) ;
+- une politique d'echec, de supervision, de cout, de desactivation ;
+- des premieres operations d'ecriture et de CI sur branche non protegee
+  et jetable, avec revue independante ;
+- aucune fusion, publication ou changement de `main` autonome.
+
+## Limites connues
+
+Une fois le workflow manuel valide, Claude fonctionne sur l'infrastructure
+GitHub **uniquement lorsqu'un workflow est declenche**. Il n'ecoute pas en
+continu les commentaires. L'agent a cadence reguliere n'existe pas encore.
+
+La surveillance ChatGPT est distincte et n'exige ni Claude Code local ni
+la fusion de cette PR. Elle peut suivre les changements, mais ne remplace
+pas un agent de developpement heberge.
+
+Sources :
+- https://github.com/anthropics/claude-code-action
 - https://github.com/anthropics/claude-code-action/blob/main/docs/custom-automations.md
 - https://github.com/anthropics/claude-code-action/blob/main/docs/security.md
-
-## Criteres de revue avant activation
-
-- [ ] Authentification/installation de l'App validees **sans exposer de jeton**
-- [ ] Execution manuelle verifiee sur une tache volontairement simple
-- [ ] Preuve d'absence de fusion/publication/edition de `main`
-- [ ] Controle d'un compte rendu, des limites de cout et des droits
-- [ ] Approbation explicite du mainteneur pour activer la cadence
