@@ -1,0 +1,30 @@
+name: TestLab Plasma VM (informatif)
+# Étude de faisabilité (issue #12). Distinct de fedora-package.yml : aucune
+# dépendance de publication, aucun contrôle obligatoire. Pas de secrets.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/testlab-plasma-vm.yml'
+      - 'tests/testlab/plasma_vm/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sonde-kvm:
+    name: Sonde KVM du runner hébergé
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Mesurer /dev/kvm, mémoire, disque
+        run: |
+          mkdir -p artefacts
+          # Échec réel si KVM est inutilisable : pas de repli silencieux.
+          tests/testlab/plasma_vm/sonde_kvm.sh artefacts/sonde-kvm.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sonde-kvm
+          path: artefacts
