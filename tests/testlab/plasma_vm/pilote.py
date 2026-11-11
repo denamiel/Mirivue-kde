@@ -99,8 +99,8 @@ def main():
     serie = art / 'console-serie.log'
     qemu = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-smp', '4', '-m', o.memoire,
             '-kernel', str(tmp / 'vmlinuz'), '-initrd', str(tmp / 'initrd'), '-append', append,
-            '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live',
-            '-drive', f'file={tmp / "scripts.iso"},media=cdrom,readonly=on,if=none,id=scr', '-device', 'ide-cd,drive=scr',
+            '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live,bus=ide.0',
+            '-drive', f'file={tmp / "scripts.iso"},media=cdrom,readonly=on,if=none,id=scr', '-device', 'ide-cd,drive=scr,bus=ide.1',
             '-device', 'virtio-vga', '-display', 'none', '-nic', 'user,model=virtio-net-pci,restrict=on',
             '-serial', f'file:{serie}', '-qmp', f'unix:{tmp / "qmp.sock"},server=on,wait=off',
             '-no-reboot', '-name', 'testlab-plasma']
