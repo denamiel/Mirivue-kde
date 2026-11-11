@@ -124,6 +124,23 @@ if [ -d $media/repo ]; then
   fi
   jalon mirivue-ouvert 8
 
+  # Saisie clavier/souris (prototype, seulement si le média porte le drapeau SAISIE) : l'HÔTE
+  # injecte les entrées par QMP (tablette USB + clavier virtuels). Ce script ne crée JAMAIS le
+  # dossier : il attend, puis constate l'existence et le propriétaire (liveuser = Mirivue).
+  if [ -f $media/SAISIE ]; then
+    nom=$(cat $media/SAISIE)
+    dossier="$base/alpha/$nom"
+    echo "saisie_a_txt_sha_avant=$(sha256sum $base/alpha/a.txt | cut -d' ' -f1)"
+    echo 'TESTLAB-ATTENTE-SAISIE'
+    for _ in $(seq 1 60); do [ -d "$dossier" ] && break; sleep 1; done
+    echo "saisie_dossier_cree=$([ -d "$dossier" ] && echo oui || echo non)"
+    echo "saisie_proprietaire=$(stat -c %U "$dossier" 2>/dev/null)"
+    echo "saisie_contenu_alpha=$(LC_ALL=C ls -1 $base/alpha | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+    echo "saisie_fichier_intact=$([ "$(sha256sum $base/alpha/a.txt | cut -d' ' -f1)" = "$(echo alpha | sha256sum | cut -d' ' -f1)" ] && echo oui || echo non)"
+    dans_session sh -c "ls -la $base/alpha" 2>&1
+    jalon saisie-apres 6
+  fi
+
   # Interaction : une autre application de la session demande à son gestionnaire de
   # fichiers (Mirivue, propriétaire de FileManager1) d'ouvrir le dossier « beta ».
   echo "interaction_avant=$(fenetres | grep -i 'caption=.*Mirivue' | head -n1)"

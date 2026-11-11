@@ -25,6 +25,7 @@ ICI = Path(__file__).resolve().parent
 ATTENDUS_PROCESSUS = ['plasmashell', 'kwin_wayland', 'xdg-desktop-portal', 'xdg-desktop-portal-kde']
 ATTENDUS_DBUS = ['org.kde.KWin', 'org.freedesktop.portal.Desktop', 'org.freedesktop.impl.portal.desktop.kde']
 JALONS_CAPTURE = ('session', 'mirivue-ouvert', 'interaction')
+JALONS_SAISIE = ('saisie-avant', 'saisie-apres')
 ANSI = re.compile(r'\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)|[@-Z\\-_])')
 
 
@@ -118,6 +119,26 @@ def verdict_mirivue(m, attendu):
     return e
 
 
+NOM_DOSSIER_SAISI = 'Dossier TestLab 1'
+
+
+def verdict_saisie(m):
+    """Preuves de l'opération de fichier réelle faite au clavier/souris (QMP) dans Mirivue.
+
+    Le script de l'invité s'exécute en root et ne crée jamais ce dossier : il constate
+    seulement qu'il existe et qui en est propriétaire (liveuser = processus Mirivue)."""
+    e = []
+    if m.get('saisie_dossier_cree') != 'oui':
+        e.append(f"dossier « {NOM_DOSSIER_SAISI} » non créé par Mirivue après la saisie clavier/souris")
+    if m.get('saisie_proprietaire') != 'liveuser':
+        e.append(f"propriétaire du dossier créé : {m.get('saisie_proprietaire')!r} ≠ 'liveuser'")
+    if m.get('saisie_contenu_alpha') != 'Dossier TestLab 1 a.txt':
+        e.append(f"contenu du dossier jetable inattendu : {m.get('saisie_contenu_alpha')!r}")
+    if m.get('saisie_fichier_intact') != 'oui':
+        e.append('le fichier témoin a.txt a été modifié')
+    return e
+
+
 def verdict_captures(captures, exigees):
     """Au moins une capture valide pour chaque jalon exigé."""
     e = []
@@ -127,13 +148,17 @@ def verdict_captures(captures, exigees):
     return e
 
 
-def verdict(m, attendu, mirivue=True, selinux='enforcing', captures=(), jalons_exiges=None):
+def verdict(m, attendu, mirivue=True, selinux='enforcing', captures=(), jalons_exiges=None, saisie=False):
     erreurs = verdict_session(m)
     if selinux == 'enforcing' and m.get('selinux') != 'Enforcing':
         erreurs.append(f"SELinux {m.get('selinux')!r} ≠ Enforcing")
     if mirivue:
         erreurs += verdict_mirivue(m, attendu)
+    if saisie:
+        erreurs += verdict_saisie(m)
     exigees = jalons_exiges if jalons_exiges is not None else (JALONS_CAPTURE if mirivue else ('session',))
+    if saisie and jalons_exiges is None:
+        exigees = tuple(exigees) + JALONS_SAISIE
     erreurs += verdict_captures(list(captures), exigees)
     return erreurs
 
@@ -274,6 +299,61 @@ def capturer(qmp, tmp, art, jalon, rang, t0, captures):
     return info
 
 
+def qcodes_du_caractere(c):
+    """Touches QMP (qcodes) pour un caractère : lettres, chiffres et espace uniquement."""
+    if c == ' ':
+        return ['spc']
+    if c.isascii() and c.isalpha():
+        return ['shift', c.lower()] if c.isupper() else [c]
+    if c.isascii() and c.isdigit():
+        return [c]
+    raise ErreurPilote(f'caractère non géré pour la saisie QMP : {c!r}')
+
+
+def envoyer_touches(qmp, touches, maintien_ms=80):
+    """Appuie simultanément sur les touches (ex. ['ctrl', 'shift', 'n']) via QMP send-key."""
+    qmp.commande('send-key', keys=[{'type': 'qcode', 'data': t} for t in touches], **{'hold-time': maintien_ms})
+
+
+def taper_texte(qmp, texte, pause=0.12):
+    for c in texte:
+        envoyer_touches(qmp, qcodes_du_caractere(c))
+        time.sleep(pause)
+
+
+def cliquer_absolu(qmp, x, y):
+    """Déplace le pointeur absolu (tablette USB, axes 0..32767) puis clic gauche."""
+    def axe(nom, valeur):
+        return {'type': 'abs', 'data': {'axis': nom, 'value': valeur}}
+
+    def bouton(bas):
+        return {'type': 'btn', 'data': {'down': bas, 'button': 'left'}}
+    qmp.commande('input-send-event', events=[axe('x', x), axe('y', y)])
+    time.sleep(0.4)
+    qmp.commande('input-send-event', events=[bouton(True)])
+    time.sleep(0.12)
+    qmp.commande('input-send-event', events=[bouton(False)])
+
+
+def saisie_dossier(qmp):
+    """Séquence clavier/souris de création d'un dossier dans la fenêtre Mirivue (comme le
+    scénario X11) : clic pour le focus, Entrée (ferme « Premiers pas »), Ctrl+L puis Échap
+    (focus sur la vue), Ctrl+Maj+N, nom, Entrée."""
+    cliquer_absolu(qmp, 16384, 16384)
+    time.sleep(1.5)
+    envoyer_touches(qmp, ['ret'])
+    time.sleep(2.0)
+    envoyer_touches(qmp, ['ctrl', 'l'])
+    time.sleep(0.5)
+    envoyer_touches(qmp, ['esc'])
+    time.sleep(0.8)
+    envoyer_touches(qmp, ['ctrl', 'shift', 'n'])
+    time.sleep(3.0)
+    taper_texte(qmp, NOM_DOSSIER_SAISI)
+    time.sleep(0.5)
+    envoyer_touches(qmp, ['ret'])
+
+
 def extraire_noyau(iso, tmp, art):
     for src in ('/images/pxeboot/vmlinuz', '/boot/x86_64/loader/linux'):
         subprocess.run(['xorriso', '-osirrox', 'on', '-indev', str(iso), '-extract', src, str(tmp / 'vmlinuz')], capture_output=True)
@@ -289,8 +369,9 @@ def extraire_noyau(iso, tmp, art):
         raise ErreurPilote('noyau/initrd introuvables dans l’ISO (voir iso-listing.txt)')
 
 
-def construire_media(tmp, paquets, forcer_echec):
-    """ISO de scripts en lecture seule : invite.sh, éventuellement repo/ et un drapeau d'échec."""
+def construire_media(tmp, paquets, forcer_echec, saisie=False):
+    """ISO de scripts en lecture seule : invite.sh, éventuellement repo/, un drapeau d'échec
+    et le drapeau de l'étape de saisie clavier/souris."""
     scripts = tmp / 'scripts'
     scripts.mkdir()
     shutil.copy(ICI / 'invite.sh', scripts / 'invite.sh')
@@ -300,6 +381,8 @@ def construire_media(tmp, paquets, forcer_echec):
         shutil.copytree(paquets, scripts / 'repo')
     if forcer_echec:
         (scripts / 'FORCER_ECHEC').write_text(forcer_echec + '\n')
+    if saisie:
+        (scripts / 'SAISIE').write_text(NOM_DOSSIER_SAISI + '\n')
     subprocess.run(['xorriso', '-as', 'mkisofs', '-V', 'TESTLAB', '-r', '-o', str(tmp / 'scripts.iso'), str(scripts)],
                    check=True, capture_output=True)
     shutil.rmtree(scripts)
@@ -316,7 +399,12 @@ def main(arguments=None):
     a.add_argument('--forcer-echec', default='', choices=['', 'plasma'],
                    help='test négatif : sabote volontairement l’invité ; l’échec doit être détecté')
     a.add_argument('--selinux', choices=['enforcing', 'permissif'], default='enforcing')
+    a.add_argument('--saisie', action='store_true',
+                   help='prototype : clavier/souris injectés par QMP (tablette USB virtuelle) pour créer un dossier '
+                        'dans Mirivue ; exige --paquets')
     o = a.parse_args(arguments)
+    if o.saisie and not o.paquets:
+        a.error('--saisie exige --paquets (il faut Mirivue installé)')
     art = o.artefacts
     art.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -343,7 +431,7 @@ def main(arguments=None):
         info = subprocess.run(['xorriso', '-indev', str(o.iso), '-pvd_info'], capture_output=True, text=True)
         label = re.search(r'Volume Id\s*:\s*(\S+)', info.stdout + info.stderr)[1]
         rapport['iso_volume_id'] = label
-        construire_media(tmp, o.paquets, o.forcer_echec)
+        construire_media(tmp, o.paquets, o.forcer_echec, o.saisie)
         append = (f'root=live:CDLABEL={label} rd.live.image rd.live.overlay.overlayfs=1 console=ttyS0,115200 '
                   + ('enforcing=0' if o.selinux == 'permissif' else 'enforcing=1'))
         serie = art / 'console-serie.log'
@@ -352,6 +440,7 @@ def main(arguments=None):
                 '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live,bus=ide.0',
                 '-drive', f'file={tmp / "scripts.iso"},media=cdrom,readonly=on,if=none,id=scr', '-device', 'ide-cd,drive=scr,bus=ide.1',
                 '-device', 'virtio-vga', '-display', 'none', '-nic', 'user,model=virtio-net-pci,restrict=on',
+                *(['-device', 'qemu-xhci', '-device', 'usb-tablet'] if o.saisie else []),
                 '-serial', f'unix:{tmp / "serie.sock"},server=on,wait=off',
                 '-qmp', f'unix:{tmp / "qmp.sock"},server=on,wait=off', '-no-reboot', '-name', 'testlab-plasma']
         (art / 'commande-qemu.txt').write_text(' '.join(qemu) + '\n')
@@ -365,11 +454,18 @@ def main(arguments=None):
                 break
             console.pomper()
             texte = nettoyer(console.texte)
-            for jalon in JALONS_CAPTURE:
+            for jalon in JALONS_CAPTURE + (('saisie-apres',) if o.saisie else ()):
                 if f'TESTLAB-JALON {jalon}' in texte and jalon not in faits:
                     faits.add(jalon)
                     rang += 1
                     capturer(qmp, tmp, art, jalon, rang, t0, captures)
+            if o.saisie and 'TESTLAB-ATTENTE-SAISIE' in texte and 'saisie' not in faits:
+                # L'invité attend : capture « avant », puis injection (une seule fois).
+                faits.add('saisie')
+                rang += 1
+                capturer(qmp, tmp, art, 'saisie-avant', rang, t0, captures)
+                saisie_dossier(qmp)
+                rapport['saisie_envoyee_a_s'] = round(time.time() - t0, 1)
             if 'TESTLAB-INVITE-FIN' in texte and 'fin' not in faits:
                 faits.add('fin')
                 fini_a = time.time()
@@ -402,7 +498,9 @@ def main(arguments=None):
                f'voir console-serie.log et captures)' + (f' ; erreur pilote : {erreur_pilote}' if erreur_pilote else ''))
     mesures = analyser(texte)
     rapport['mesures'] = mesures
-    erreurs = verdict(mesures, attendu, mirivue=bool(o.paquets), selinux=o.selinux, captures=captures)
+    erreurs = verdict(mesures, attendu, mirivue=bool(o.paquets), selinux=o.selinux, captures=captures, saisie=o.saisie)
+    if o.saisie and 'saisie_envoyee_a_s' not in rapport:
+        erreurs.append('la saisie clavier/souris n’a jamais été envoyée (marqueur d’attente absent)')
     rapport['erreurs'] = erreurs
     if erreurs:
         fin(1, 'preuves insuffisantes : ' + '; '.join(erreurs))

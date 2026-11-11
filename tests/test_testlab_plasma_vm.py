@@ -226,5 +226,83 @@ class TestGardesSecurite(unittest.TestCase):
         self.assertIn("default='enforcing'", source)
 
 
+def mesures_saisie_ok():
+    m = mesures_ok()
+    m.update(saisie_dossier_cree='oui', saisie_proprietaire='liveuser',
+             saisie_contenu_alpha='Dossier TestLab 1 a.txt', saisie_fichier_intact='oui')
+    return m
+
+
+class QmpFactice:
+    def __init__(self):
+        self.appels = []
+
+    def commande(self, nom, **args):
+        self.appels.append((nom, args))
+        return {'return': {}}
+
+
+class TestSaisie(unittest.TestCase):
+    CAPT = CAPTURES + [{'jalon': j, 'valide': True, 'detail': 'ok', 't_s': 1.0} for j in pilote.JALONS_SAISIE]
+
+    def verdict(self, m, captures=None):
+        return pilote.verdict(m, ATTENDU, captures=self.CAPT if captures is None else captures, saisie=True)
+
+    def test_cas_nominal(self):
+        self.assertEqual(self.verdict(mesures_saisie_ok()), [])
+
+    def test_chaque_alteration_est_detectee(self):
+        for cle, valeur in (('saisie_dossier_cree', 'non'), ('saisie_proprietaire', 'root'),
+                            ('saisie_contenu_alpha', 'a.txt'), ('saisie_fichier_intact', 'non')):
+            m = mesures_saisie_ok()
+            m[cle] = valeur
+            self.assertTrue(self.verdict(m), cle)
+
+    def test_mesures_absentes_sont_un_echec(self):
+        self.assertTrue(self.verdict(mesures_ok()))
+
+    def test_captures_avant_apres_exigees(self):
+        self.assertTrue(self.verdict(mesures_saisie_ok(), captures=CAPTURES))
+
+    def test_sans_option_la_saisie_nest_pas_exigee(self):
+        self.assertEqual(pilote.verdict(mesures_ok(), ATTENDU, captures=CAPTURES), [])
+
+    def test_caracteres_de_saisie(self):
+        self.assertEqual(pilote.qcodes_du_caractere('D'), ['shift', 'd'])
+        self.assertEqual(pilote.qcodes_du_caractere('a'), ['a'])
+        self.assertEqual(pilote.qcodes_du_caractere('1'), ['1'])
+        self.assertEqual(pilote.qcodes_du_caractere(' '), ['spc'])
+        with self.assertRaises(pilote.ErreurPilote):
+            pilote.qcodes_du_caractere('é')
+
+    def test_sequence_qmp_clavier_souris(self):
+        q = QmpFactice()
+        with mock.patch.object(pilote.time, 'sleep'):
+            pilote.saisie_dossier(q)
+        noms = [n for n, _ in q.appels]
+        self.assertEqual(noms.count('input-send-event'), 3)   # déplacement, appui, relâchement
+        touches = [[k['data'] for k in a['keys']] for n, a in q.appels if n == 'send-key']
+        self.assertIn(['ctrl', 'shift', 'n'], touches)
+        self.assertEqual(touches[-1], ['ret'])
+        saisi = ''.join(t[-1] if t != ['spc'] else ' ' for t in touches[4:-1])
+        self.assertEqual(saisi, pilote.NOM_DOSSIER_SAISI.lower())
+        self.assertTrue(all(a.get('hold-time') for n, a in q.appels if n == 'send-key'))
+
+    def test_saisie_exige_les_paquets(self):
+        with self.assertRaises(SystemExit):
+            pilote.main(['--iso', 'x', '--artefacts', tempfile.mkdtemp(), '--saisie'])
+
+    def test_le_script_invite_ne_cree_pas_le_dossier(self):
+        bloc = (DOSSIER / 'invite.sh').read_text().split('SAISIE ]')[1].split('jalon saisie-apres')[0]
+        for interdit in ('mkdir', 'touch ', 'cp ', 'mv '):
+            self.assertNotIn(interdit, bloc)
+
+    def test_entrees_par_qmp_sans_privilege_kwin(self):
+        source = (DOSSIER / 'pilote.py').read_text()
+        self.assertIn("'usb-tablet'", source)
+        self.assertNotIn('fake_input', source)
+        self.assertNotIn('KWIN_WAYLAND_NO_PERMISSION_CHECKS', source + (DOSSIER / 'invite.sh').read_text())
+
+
 if __name__ == '__main__':
     unittest.main()
