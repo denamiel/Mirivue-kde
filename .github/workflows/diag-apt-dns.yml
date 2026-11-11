@@ -1,0 +1,47 @@
+name: Diagnostic apt/DNS des images runner (temporaire)
+# Diagnostic ponctuel, sans secret, à supprimer après analyse.
+# Compare ubuntu-24.04 et ubuntu-26.04 (désormais « ubuntu-latest ») pour comprendre
+# l'échec « Temporary failure resolving » d'apt. Aucune variable d'environnement,
+# aucun secret ni jeton n'est lu ou affiché ; seuls la résolution DNS, l'accès HTTP
+# anonyme aux miroirs et un « apt-get update » borné sont observés.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/diag-apt-dns.yml'
+permissions:
+  contents: read
+jobs:
+  diag:
+    name: apt/DNS sur ${{ matrix.image }}
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - name: Système et configuration du résolveur
+        run: |
+          head -n 3 /etc/os-release
+          apt --version | head -n 1
+          echo '--- /etc/resolv.conf'
+          cat /etc/resolv.conf
+          echo '--- resolvectl'
+          resolvectl status 2>&1 | head -n 20 || true
+          echo '--- miroirs apt'
+          head -n 5 /etc/apt/apt-mirrors.txt 2>&1 || true
+      - name: Résolution DNS et accès HTTP anonyme (hors apt)
+        run: |
+          for h in azure.archive.ubuntu.com security.ubuntu.com archive.ubuntu.com dl.fedoraproject.org github.com; do
+            printf '%s -> ' "$h"
+            getent hosts "$h" | head -n 1 || echo 'ECHEC getent'
+          done
+          echo '--- HTTP anonyme vers le miroir'
+          curl -sS -m 15 -o /dev/null -w 'code HTTP : %{http_code}\n' http://azure.archive.ubuntu.com/ubuntu/dists/ || echo 'ECHEC curl'
+      - name: apt-get update (une seule tentative, bornée)
+        run: |
+          code=0
+          timeout 150 sudo apt-get -o Acquire::Retries=0 update > apt-update.log 2>&1 || code=$?
+          tail -n 15 apt-update.log
+          echo "code apt : $code"
+          exit "$code"
