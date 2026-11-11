@@ -3,8 +3,8 @@
 **Statut :** preuve de faisabilité obtenue, **job informatif** (pas un contrôle obligatoire). Une VM
 Fedora KDE jetable démarre une vraie session Plasma Wayland et y lance le RPM Mirivue du commit testé
 (trois essais verts sur un même commit, voir « Résultats »). Ce n'est pas encore un banc validé :
-aucune interaction clavier/souris, une seule série d'essais, intermittences non mesurées (voir
-« Limites connues »).
+interaction clavier/souris seulement à l'état de prototype (un essai), stabilité non établie
+(verdict « INSUFFISANT », voir « Mesure de stabilité ») (voir « Limites connues »).
 
 Suivi : [issue #12](https://github.com/denamiel/Mirivue-kde/issues/12).
 
@@ -68,6 +68,46 @@ Mirivue** et test négatif tous verts. Le checkout de ce workflow est la référ
 | Durée / coût | 3 essais : 190 s, 198 s, 191 s de pilotage (login série ~91–100 s, fenêtre Mirivue ~151–159 s), plus construction du RPM, dépôt hors ligne et ISO (en cache ou 3,5 Go). Minutes de runner standard (dépôt public). |
 | Stabilité | **3 essais sur 3 verts, lancés en parallèle sur un seul commit (`1f19f7a`).** Les runs précédents du scénario Mirivue (commits `85014f6`, `2eee0aa`, `1b8be71`) étaient rouges pour des défauts de mise au point, corrigés depuis. Une seule série verte ne suffit pas pour conclure sur les intermittences : à répéter sur plusieurs commits et plusieurs jours avant toute promotion. |
 
+## Saisie clavier/souris (prototype)
+
+**Mécanisme.** L'**hôte** injecte les entrées par QMP : `send-key` (clavier PS/2 virtuel) et
+`input-send-event` (pointeur absolu d'une tablette USB virtuelle `usb-tablet`, ajoutée seulement avec
+`--saisie`). Aucun `KWIN_WAYLAND_NO_PERMISSION_CHECKS`, aucun `fake_input` : l'invité voit un vrai clavier et
+une vraie tablette, comme avec du matériel (garde dans les tests). La synchronisation passe par le marqueur
+série `TESTLAB-ATTENTE-SAISIE` ; l'hôte capture l'écran avant (`saisie-avant`), injecte, puis l'invité attend
+l'effet.
+
+**Opération réelle.** Clic au centre (focus), `Entrée` (ferme « Premiers pas »), `Ctrl+L`, `Échap`,
+`Ctrl+Maj+N`, saisie de « Dossier TestLab 1 », `Entrée` : la même séquence que le scénario X11. Le script de
+l'invité (root) **ne crée jamais** le dossier (test de garde) ; il constate qu'il existe, que son propriétaire
+est `liveuser` (donc créé par Mirivue et KIO), que le contenu du dossier jetable est exactement
+`Dossier TestLab 1` + `a.txt` et que `a.txt` est intact (SHA-256). Captures valides avant/après exigées.
+
+**Résultat (run [43067439480](https://github.com/denamiel/Mirivue-kde/actions/runs/43067439480), `16902a5`,
+artefact `vm-saisie`) :** code 0, mesures `saisie_dossier_cree=oui`, `saisie_proprietaire=liveuser`,
+`saisie_fichier_intact=oui` ; la capture « avant » montre la boîte « Premiers pas » et `a.txt` seul, la
+capture « après » montre le dossier créé (barre d'état « 1 dossier, 1 fichier »). **Un seul essai** : ce
+prototype n'a pas de mesure de stabilité. Limites : positions en coordonnées d'écran fixes (clic au centre),
+pauses fixes côté hôte, une seule opération (création de dossier) ; renommer, copier, supprimer (corbeille)
+restent à écrire sur le même modèle. Le job reste **informatif**.
+
+## Mesure de stabilité (protocole)
+
+Outil : `tests/testlab/plasma_vm/stabilite.py`, qui lit les exécutions réelles de l'API GitHub.
+Un **essai** est un job `vm-mirivue` ; il est compté seulement s'il a atteint l'étape « Démarrer l'invité »
+(une panne avant, par exemple réseau ou cache, est classée **infrastructure**, exclue du taux mais rapportée).
+Une **exécution indépendante** est une exécution du workflow espacée d'au moins 2 h de la précédente retenue :
+les trois essais parallèles d'une même exécution ne sont pas indépendants. **Seuil proposé** (à faire relire) :
+au moins 30 essais comptés issus d'exécutions indépendantes, sur au moins 24 h, sans aucun échec du TestLab
+(règle de trois : 0 échec sur 30 ⇒ taux d'échec < 10 % à 95 %). Tout échec doit être analysé
+individuellement. Sans données suffisantes, le verdict est « INSUFFISANT ».
+
+**Mesure au 11 novembre 2026 (17 h 40 UTC) :** 4 exécutions du scénario complet (`1f19f7a`, `2bf5c1b`,
+`9d7ac36`, `16902a5`) mais seulement **1 indépendante** (toutes dans une fenêtre de 1 h 20) : 3 essais
+comptés, 0 échec du TestLab, 0 panne d'infrastructure, étalement 0 h. **Verdict : INSUFFISANT.** La
+stabilité n'est donc **pas** établie. Les exécutions doivent s'espacer dans le temps (relances manuelles
+`workflow_dispatch` ou push) ; aucune surveillance automatique n'est active.
+
 ## Architecture et frontière de confiance
 
 - Hôte : runner GitHub éphémère ; **aucun `apt`** (les miroirs Ubuntu ont été injoignables pendant plus de
@@ -79,8 +119,9 @@ Mirivue** et test négatif tous verts. Le checkout de ce workflow est la référ
   en lecture seule) contient `invite.sh`, `fenetres.py`, `connexions.py` et le dépôt RPM.
 - Sortent : console série, captures QMP, rapports. Le pilote efface son répertoire temporaire ; le
   runner est détruit ensuite.
-- Pilotage par la console série (connexion `liveuser`, `sudo`) : aucune injection, aucun
-  `KWIN_WAYLAND_NO_PERMISSION_CHECKS` (test de garde dans la suite).
+- Pilotage par la console série (connexion `liveuser`, `sudo`) : aucun `KWIN_WAYLAND_NO_PERMISSION_CHECKS`
+  (test de garde dans la suite). Les entrées clavier/souris du prototype passent par QMP, côté hôte,
+  sans élargir ce que l'invité peut faire ni ce qui en sort.
 - Workflow distinct, **informatif**, déclenché par ses propres fichiers ou à la main ; aucun lien avec
   COPR/Pacman ni les contrôles obligatoires.
 
@@ -90,9 +131,9 @@ Mirivue** et test négatif tous verts. Le checkout de ce workflow est la référ
   l'ISO (chargeur et UEFI non testés) ; verrouillage d'écran désactivé dans l'invité.
 - Mirivue est rendu gestionnaire de fichiers par défaut **dans l'invité** pour posséder `FileManager1` ;
   ce n'est pas le comportement d'une session où Dolphin reste le défaut.
-- **Aucune interaction clavier/souris** : le scénario vérifie l'ouverture de fenêtres, l'appartenance du
-  service D-Bus et l'ouverture d'un dossier par `FileManager1`, pas les actions de fichiers de Mirivue.
-  Aucune injection d'entrée n'est utilisée (frontière de confiance).
+- **Clavier/souris : prototype informatif seulement** (job `vm-saisie`, option `--saisie`). Le scénario
+  standard (`vm-mirivue`) n'injecte aucune entrée et ne vérifie pas d'action de fichier de Mirivue ; le
+  prototype est décrit dans « Saisie clavier/souris (prototype) ».
 - La boîte « Premiers pas avec Mirivue » (première exécution) reste affichée sur les captures.
 - Les paquets du dépôt hors ligne sont **vérifiés sur l'hôte** ; dans l'invité, `gpgcheck=0` s'applique au
   dépôt local (le RPM de Mirivue n'est pas signé).

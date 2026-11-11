@@ -304,5 +304,61 @@ class TestSaisie(unittest.TestCase):
         self.assertNotIn('KWIN_WAYLAND_NO_PERMISSION_CHECKS', source + (DOSSIER / 'invite.sh').read_text())
 
 
+_spec_s = importlib.util.spec_from_file_location('stabilite_plasma_vm', DOSSIER / 'stabilite.py')
+stabilite = importlib.util.module_from_spec(_spec_s)
+_spec_s.loader.exec_module(stabilite)
+
+
+def job_essai(conclusion, etape_invite=None, n=1):
+    etapes = [{'name': 'Récupérer et vérifier l\'image Fedora KDE', 'conclusion': 'success'}]
+    if etape_invite is not None:
+        etapes.append({'name': "Démarrer l'invité, installer Mirivue hors ligne et exécuter le scénario",
+                       'conclusion': etape_invite})
+    return {'name': f'{stabilite.PREFIXE_ESSAI} sous Plasma Wayland (essai {n})', 'conclusion': conclusion,
+            'steps': etapes}
+
+
+def execution(rid, date, jobs):
+    return {'id': rid, 'created_at': date, 'head_sha': 'a' * 40, 'jobs': jobs}
+
+
+class TestStabilite(unittest.TestCase):
+    def test_classement_des_essais(self):
+        self.assertEqual(stabilite.classer_essai(job_essai('success', 'success')), 'ok')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', 'failure')), 'echec_testlab')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', None)), 'infra')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', 'skipped')), 'infra')
+        self.assertEqual(stabilite.classer_essai(job_essai('cancelled', None)), 'ignore')
+        self.assertEqual(stabilite.classer_essai({'name': 'Sonde KVM', 'conclusion': 'success'}), 'ignore')
+
+    def test_essais_paralleles_et_runs_rapproches_ne_sont_pas_independants(self):
+        trois = [job_essai('success', 'success', n) for n in (1, 2, 3)]
+        runs = [execution(1, '2026-11-11T10:00:00Z', trois), execution(2, '2026-11-11T10:30:00Z', trois),
+                execution(3, '2026-11-11T12:00:00Z', trois)]
+        b = stabilite.evaluer(runs, espacement_h=2.0)
+        self.assertEqual(b['executions_independantes'], 2)
+        self.assertEqual(b['essais_comptes'], 6)
+
+    def test_donnees_insuffisantes_jamais_stable(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('success', 'success')])]
+        self.assertTrue(stabilite.evaluer(runs)['verdict'].startswith('INSUFFISANT'))
+
+    def test_un_echec_testlab_rend_le_verdict_instable(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('failure', 'failure')])]
+        self.assertTrue(stabilite.evaluer(runs)['verdict'].startswith('INSTABLE'))
+
+    def test_panne_infra_exclue_du_taux_mais_rapportee(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('failure', None), job_essai('success', 'success')])]
+        b = stabilite.evaluer(runs)
+        self.assertEqual((b['essais_comptes'], len(b['pannes_infra'])), (1, 1))
+
+    def test_seuil_atteint_seulement_avec_assez_d_essais_et_d_etalement(self):
+        trois = [job_essai('success', 'success', n) for n in (1, 2, 3)]
+        runs = [execution(i, f'2026-11-{11 + i // 3:02d}T{(i % 3) * 8:02d}:00:00Z', trois) for i in range(10)]
+        b = stabilite.evaluer(runs, espacement_h=2.0)
+        self.assertEqual(b['essais_comptes'], 30)
+        self.assertTrue(b['verdict'].startswith('SEUIL ATTEINT'), b)
+
+
 if __name__ == '__main__':
     unittest.main()
