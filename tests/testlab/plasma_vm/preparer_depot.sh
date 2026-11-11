@@ -29,16 +29,15 @@ bd=$(sudo find "$racine/usr/lib/sysimage/rpm" "$racine/var/lib/rpm" -maxdepth 0 
 sudo mkdir -p "$travail/iso-root/usr/lib/sysimage" "$travail/iso-root/etc"
 sudo cp -a "$bd" "$travail/iso-root/usr/lib/sysimage/rpm"
 sudo cp -a "$racine/etc/os-release" "$travail/iso-root/etc/os-release" 2>/dev/null || true
-echo "paquets installés dans l'ISO : $(sudo rpm --dbpath "$travail/iso-root/usr/lib/sysimage/rpm" -qa 2>/dev/null | wc -l || true)"
 nb=$(ls "$rpmdir"/mirivue-kde-*.rpm | wc -l); [ "$nb" = 1 ] || { echo "il faut exactement 1 RPM mirivue-kde, trouvé $nb" >&2; exit 1; }
-sudo mkdir -p "$travail/out"
+sudo mkdir -p "$travail/out" "$travail/meta"
 # Clé Fedora 45 épinglée : extraite du trousseau déjà contrôlé par recuperer_image.sh (empreinte vérifiée).
 gnupg=$(mktemp -d); chmod 700 "$gnupg"
 GNUPGHOME=$gnupg gpg --batch --import "$(dirname "$iso")/fedora.gpg" 2>/dev/null
 GNUPGHOME=$gnupg gpg --batch --export "$CLE_EMPREINTE" > "$travail/cle.gpg"
 [ -s "$travail/cle.gpg" ] || { echo "clé épinglée $CLE_EMPREINTE absente de fedora.gpg" >&2; exit 1; }
 rm -rf "$gnupg"
-sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" -v "$travail/cle.gpg:/cle.gpg:ro" fedora:45 bash -euo pipefail -c '
+sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" -v "$travail/meta:/meta" -v "$travail/cle.gpg:/cle.gpg:ro" fedora:45 bash -euo pipefail -c '
   dnf -y install createrepo_c rpm >/dev/null
   mkdir -p /cache
   dnf -y --installroot=/iso-root --use-host-config --releasever=45 --setopt=install_weak_deps=False \
@@ -57,16 +56,18 @@ sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/is
     rpm -qp --qf "%{RSAHEADER:pgpsig}\n" "$f" 2>/dev/null | grep -qi "$id_cle" || { echo "$f : pas signé par la clé épinglée $id_cle" >&2; exit 1; }
   done
   cp /in/mirivue-kde-*.rpm /out/
+  rpm -qp --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}" /out/mirivue-kde-*.rpm > /meta/nevra
+  echo "paquets installes dans la base de lISO : $(rpm --dbpath /iso-root/usr/lib/sysimage/rpm -qa | wc -l)"
   createrepo_c --quiet /out
 '
 sudo cp -a "$travail"/out/. "$sortie/repo/"
+nevra=$(cat "$travail/meta/nevra")
 sudo chown -R "$(id -u):$(id -g)" "$sortie"
 rpm_file=$(ls "$sortie"/repo/mirivue-kde-*.rpm)
 ls "$sortie"/repo/mirivue-kde-*.rpm | wc -l | grep -qx 1
-python3 - "$rpm_file" "$commit" "$sortie" <<'PY'
-import hashlib, json, subprocess, sys
-f, commit, sortie = sys.argv[1:]
-nevra = subprocess.check_output(['rpm', '-qp', '--qf', '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', f], text=True)
+python3 - "$rpm_file" "$commit" "$sortie" "$nevra" <<'PY'
+import hashlib, json, sys
+f, commit, sortie, nevra = sys.argv[1:]
 json.dump({'commit': commit, 'rpm_nevra': nevra, 'rpm_sha256': hashlib.sha256(open(f, 'rb').read()).hexdigest()},
           open(f'{sortie}/attendu.json', 'w'), indent=2)
 PY

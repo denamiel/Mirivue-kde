@@ -212,7 +212,7 @@ class TestGardesSecurite(unittest.TestCase):
         self.assertNotIn('--xwayland', texte)
 
     def test_scripts_shell_syntaxe(self):
-        for nom in ('invite.sh', 'sonde_kvm.sh', 'recuperer_image.sh', 'preparer_depot.sh'):
+        for nom in ('invite.sh', 'sonde_kvm.sh', 'recuperer_image.sh', 'preparer_depot.sh', 'conteneur.sh'):
             subprocess.run(['bash', '-n', str(DOSSIER / nom)], check=True)
 
     def test_reseau_invite_restreint_et_selinux_par_defaut(self):

@@ -2,6 +2,9 @@ name: TestLab Plasma VM (informatif)
 # Étude de faisabilité (issue #12). Distinct de fedora-package.yml : aucune
 # dépendance de publication, aucun contrôle obligatoire. Pas de secrets.
 # Chaque job tourne sur un runner GitHub éphémère ; la VM invitée n'a pas de réseau.
+# Aucun apt : les miroirs Ubuntu des runners ont été indisponibles (DNS). Les outils
+# (QEMU, xorriso, netpbm) s'installent par dnf dans un conteneur Fedora 45 jetable
+# qui ne reçoit que /dev/kvm (tests/testlab/plasma_vm/conteneur.sh).
 on:
   pull_request:
     paths:
@@ -11,13 +14,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-env:
-  ISO_CACHE: ~/iso-cache
 jobs:
   sonde-kvm:
     name: Sonde KVM du runner hébergé
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,23 +28,22 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p artefacts
+          stat -c 'avant : %n %a %U:%G' /dev/kvm | tee artefacts/kvm-avant.txt
           # Mesure seule : le code 2 est attendu tant que /dev/kvm n'est pas ouvert.
           tests/testlab/plasma_vm/sonde_kvm.sh artefacts/sonde-kvm-brut.json | tee -a "$GITHUB_STEP_SUMMARY" || true
       - name: Ouvrir /dev/kvm à l'utilisateur du runner (VM GitHub éphémère uniquement)
+        timeout-minutes: 5
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Installer QEMU et OVMF
-        timeout-minutes: 8
-        run: |
-          sudo apt-get -o Acquire::Retries=3 update -qq
-          sudo apt-get -o Acquire::Retries=3 install -y -qq qemu-system-x86 ovmf
-      - name: Sonde finale (échec réel si KVM inutilisable)
+      - name: Sonde finale dans un conteneur Fedora (échec réel si KVM inutilisable)
+        timeout-minutes: 10
         shell: bash
         run: |
           set -o pipefail
-          tests/testlab/plasma_vm/sonde_kvm.sh artefacts/sonde-kvm.json | tee -a "$GITHUB_STEP_SUMMARY"
+          stat -c 'après : %n %a %U:%G' /dev/kvm | tee artefacts/kvm-apres.txt
+          tests/testlab/plasma_vm/conteneur.sh tests/testlab/plasma_vm/sonde_kvm.sh artefacts/sonde-kvm.json | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -53,13 +53,15 @@ jobs:
   tests-pilote:
     name: Tests de non-régression du pilote (verdict, journal, captures, échecs)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    container: fedora:45
     steps:
+      - name: Préparer Fedora
+        timeout-minutes: 8
+        run: dnf -y install python3 netpbm-progs bash
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: sudo apt-get -o Acquire::Retries=3 update -qq && sudo apt-get -o Acquire::Retries=3 install -y -qq netpbm
-        timeout-minutes: 8
       - name: Tests unitaires
         run: python3 -m unittest tests/test_testlab_plasma_vm.py -v
 
@@ -88,22 +90,27 @@ jobs:
           if-no-files-found: error
 
   vm-mirivue:
-    name: VM Fedora KDE — Mirivue RPM sous Plasma Wayland
+    name: VM Fedora KDE — Mirivue RPM sous Plasma Wayland (essai ${{ matrix.essai }})
     needs: [sonde-kvm, tests-pilote, rpm]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        essai: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Ouvrir /dev/kvm et installer les outils (runner éphémère uniquement)
-        timeout-minutes: 8
+      - name: Ouvrir /dev/kvm (runner éphémère uniquement)
+        timeout-minutes: 5
         run: |
+          mkdir -p artefacts-vm
+          stat -c 'avant : %n %a %U:%G' /dev/kvm | tee artefacts-vm/kvm-avant.txt
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          sudo apt-get -o Acquire::Retries=3 update -qq
-          sudo apt-get -o Acquire::Retries=3 install -y -qq qemu-system-x86 xorriso netpbm rpm
+          git status --porcelain > "$RUNNER_TEMP/git-avant.txt"
       - uses: actions/cache@v4
         with:
           path: ~/iso-cache
@@ -123,23 +130,41 @@ jobs:
           set -euo pipefail
           . tests/testlab/plasma_vm/image.env
           tests/testlab/plasma_vm/preparer_depot.sh ~/iso-cache/"$ISO_NOM" "$PWD/rpm-commit" "$PWD/depot" 2>&1 | tee depot.log
-          mkdir -p artefacts-vm
           (cd depot && ls -l repo | sed 's/^/ /') > artefacts-vm/depot-liste.txt
           cp depot/attendu.json depot.log artefacts-vm/
       - name: Démarrer l'invité, installer Mirivue hors ligne et exécuter le scénario
+        timeout-minutes: 30
         shell: bash
         run: |
           set -euo pipefail
           . tests/testlab/plasma_vm/image.env
-          python3 tests/testlab/plasma_vm/pilote.py --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-vm \
+          tests/testlab/plasma_vm/conteneur.sh python3 tests/testlab/plasma_vm/pilote.py \
+            --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-vm \
             --paquets "$PWD/depot/repo" --attendu "$PWD/depot/attendu.json" --delai 1500
       - name: Résumé
         if: always()
-        run: cat artefacts-vm/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'Aucun résumé produit.' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" artefacts-vm 2>/dev/null || true
+          cat artefacts-vm/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'Aucun résumé produit.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Vérifier l'état de l'hôte après la VM (nettoyage, permissions, aucune trace)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          stat -c 'après : %n %a %U:%G' /dev/kvm | tee artefacts-vm/kvm-apres.txt
+          erreurs=0
+          pgrep -a qemu && { echo 'ERREUR : processus QEMU restant' ; erreurs=1; }
+          ls -d "$RUNNER_TEMP"/plasma-vm-* 2>/dev/null && { echo 'ERREUR : répertoire temporaire de la VM non effacé'; erreurs=1; }
+          git status --porcelain | grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' > "$RUNNER_TEMP/git-apres.txt"
+          grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' "$RUNNER_TEMP/git-avant.txt" | diff - "$RUNNER_TEMP/git-apres.txt" \
+            || { echo 'ERREUR : le dépôt de travail a été modifié'; erreurs=1; }
+          { echo '### État de l hôte après la VM'; echo "- /dev/kvm : $(cat artefacts-vm/kvm-avant.txt) → $(cat artefacts-vm/kvm-apres.txt)";
+            echo "- erreurs de nettoyage : $erreurs"; } | tee -a "$GITHUB_STEP_SUMMARY" > artefacts-vm/etat-hote.md
+          exit $erreurs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: vm-mirivue
+          name: vm-mirivue-${{ matrix.essai }}
           path: artefacts-vm
 
   vm-echec-force:
@@ -151,14 +176,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Ouvrir /dev/kvm et installer les outils (runner éphémère uniquement)
-        timeout-minutes: 8
+      - name: Ouvrir /dev/kvm (runner éphémère uniquement)
+        timeout-minutes: 5
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          sudo apt-get -o Acquire::Retries=3 update -qq
-          sudo apt-get -o Acquire::Retries=3 install -y -qq qemu-system-x86 xorriso netpbm
       - uses: actions/cache@v4
         with:
           path: ~/iso-cache
@@ -168,15 +191,17 @@ jobs:
         run: |
           set -euo pipefail
           tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache
-      - name: Invité saboté (plasmashell tué) — le pilote DOIT sortir en code 1
+      - name: Invité saboté (plasmashell arrêté) — le pilote DOIT sortir en code 1
+        timeout-minutes: 20
         shell: bash
         run: |
           set +e
           . tests/testlab/plasma_vm/image.env
-          python3 tests/testlab/plasma_vm/pilote.py --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-echec \
-            --forcer-echec plasma --delai 900
+          tests/testlab/plasma_vm/conteneur.sh python3 tests/testlab/plasma_vm/pilote.py \
+            --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-echec --forcer-echec plasma --delai 900
           code=$?
           set -e
+          sudo chown -R "$(id -u):$(id -g)" artefacts-echec
           echo "code du pilote : $code" | tee -a "$GITHUB_STEP_SUMMARY"
           # Le test réussit seulement si l'échec est détecté, expliqué et documenté.
           [ "$code" = 1 ] || { echo "échec forcé non détecté comme code 1 (reçu $code)" >&2; exit 1; }
