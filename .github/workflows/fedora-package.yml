@@ -220,8 +220,9 @@ jobs:
           check-latest: true
       - name: Installer les dépendances déclarées
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1 libopengl0 libxkbcommon0 libpulse0 libasound2t64
+          # Repli DNS conditionnel et réversible (runner éphémère), signatures APT intactes ;
+          # un échec persistant reste rouge. Voir packaging/ci_apt_install.sh.
+          bash packaging/ci_apt_install.sh libegl1 libopengl0 libxkbcommon0 libpulse0 libasound2t64
           python -c 'import subprocess, sys, tomllib; dependencies = tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]; subprocess.check_call([sys.executable, "-m", "pip", "install", *dependencies])'
       - name: Vérifier le fonctionnement Python
         env:

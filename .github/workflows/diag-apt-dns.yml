@@ -1,13 +1,15 @@
 name: Diagnostic apt/DNS des images runner (temporaire)
-# Diagnostic ponctuel, sans secret, à supprimer après analyse.
-# Compare ubuntu-24.04 et ubuntu-26.04 (désormais « ubuntu-latest ») pour comprendre
-# l'échec « Temporary failure resolving » d'apt. Aucune variable d'environnement,
-# aucun secret ni jeton n'est lu ou affiché ; seuls la résolution DNS, l'accès HTTP
-# anonyme aux miroirs et un « apt-get update » borné sont observés.
+# Diagnostic ponctuel, sans secret, à supprimer après validation du correctif.
+# - job « diag » : compare ubuntu-24.04 et ubuntu-26.04 (résolveur local et résolveurs publics).
+# - job « repli » : teste packaging/ci_apt_install.sh dans trois scénarios (normal, repli
+#   déclenché, échec persistant contrôlé) en bloquant le port 53 par iptables sur le
+#   runner éphémère (règles retirées en fin de test). Aucune variable d'environnement,
+#   aucun secret ni jeton n'est lu ou affiché.
 on:
   pull_request:
     paths:
       - '.github/workflows/diag-apt-dns.yml'
+      - 'packaging/ci_apt_install.sh'
 permissions:
   contents: read
 jobs:
@@ -20,32 +22,13 @@ jobs:
       matrix:
         image: [ubuntu-24.04, ubuntu-26.04]
     steps:
-      - name: Système et configuration du résolveur
-        run: |
-          head -n 3 /etc/os-release
-          apt --version | head -n 1
-          echo '--- /etc/resolv.conf'
-          cat /etc/resolv.conf
-          echo '--- resolvectl'
-          resolvectl status 2>&1 | head -n 20 || true
-          echo '--- miroirs apt'
-          head -n 5 /etc/apt/apt-mirrors.txt 2>&1 || true
-      - name: Résolution DNS et accès HTTP anonyme (hors apt)
-        run: |
-          for h in azure.archive.ubuntu.com security.ubuntu.com archive.ubuntu.com dl.fedoraproject.org github.com; do
-            printf '%s -> ' "$h"
-            getent hosts "$h" | head -n 1 || echo 'ECHEC getent'
-          done
-          echo '--- HTTP anonyme vers le miroir'
-          curl -sS -m 15 -o /dev/null -w 'code HTTP : %{http_code}\n' http://azure.archive.ubuntu.com/ubuntu/dists/ || echo 'ECHEC curl'
-      - name: Même nom, résolveur local contre résolveurs publics (diagnostic de cause)
+      - name: Résolveur local contre résolveurs publics
         run: |
           h=azure.archive.ubuntu.com
-          echo "--- résolveur local (127.0.0.53)"
-          resolvectl query "$h" 2>&1 | head -n 4 || true
-          for srv in 168.63.129.16 8.8.8.8 1.1.1.1; do
+          printf '%s (local) -> ' "$h"; getent hosts "$h" | head -n 1 || echo 'non résolu'
+          for srv in 168.63.129.16 1.1.1.1; do
             echo "--- serveur $srv"
-            timeout 8 python3 - "$srv" "$h" <<'PY' || echo 'ECHEC'
+            timeout 8 python3 - "$srv" "$h" <<'PY' || echo 'ECHEC (aucune réponse)'
           import socket, struct, sys
           srv, nom = sys.argv[1], sys.argv[2]
           q = struct.pack('>HHHHHH', 0x1234, 0x0100, 1, 0, 0, 0)
@@ -54,20 +37,60 @@ jobs:
           s.settimeout(5)
           s.sendto(q, (srv, 53))
           r = s.recv(512)
-          rcode = r[3] & 15
-          print('rcode', rcode, '(0 = succès, 2 = SERVFAIL, 3 = NXDOMAIN) ; réponses :', struct.unpack('>H', r[6:8])[0])
+          print('rcode', r[3] & 15, '; réponses :', struct.unpack('>H', r[6:8])[0])
           PY
           done
-      - name: apt-get update (une seule tentative, bornée ; échec si un miroir est injoignable)
+
+  repli:
+    name: repli DNS (${{ matrix.scenario }}) sur ${{ matrix.image }}
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu-24.04, ubuntu-26.04]
+        scenario: [normal, repli, echec]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Scénario ${{ matrix.scenario }}
+        shell: bash
         run: |
-          # apt-get update renvoie 0 même quand tout échoue (avertissements « W: ») :
-          # l'échec est donc détecté sur le contenu du journal.
+          set -uo pipefail
+          scenario='${{ matrix.scenario }}'
+          iface=$(ip -o route get 1.1.1.1 | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1)
+          avant=$(resolvectl dns "$iface")
+          echo "DNS avant : $avant"
+          regles=()
+          bloquer() {  # $@ : arguments iptables de sélection
+            for p in udp tcp; do sudo iptables -I OUTPUT -p "$p" --dport 53 "$@" -j DROP && regles+=("$p|$*"); done
+          }
+          case "$scenario" in
+            repli) bloquer '!' -d 1.1.1.1 ;;   # le résolveur Azure est « muet », 1.1.1.1 joignable
+            echec) bloquer ;;                  # plus aucun DNS sortant
+          esac
+          sudo resolvectl flush-caches
+          export CI_APT_DNS_TENTATIVES=2 CI_APT_DNS_PAUSE=2
           code=0
-          timeout 150 sudo apt-get -o Acquire::Retries=0 update > apt-update.log 2>&1 || code=$?
-          tail -n 15 apt-update.log
-          if grep -q -e '^Err:' -e 'Temporary failure resolving' apt-update.log; then
-            echo 'ÉCHEC DÉTECTÉ : au moins un miroir est injoignable (voir journal)'
-            code=1
-          fi
-          echo "code apt : $code"
-          exit "$code"
+          bash packaging/ci_apt_install.sh libegl1 > sortie.log 2>&1 || code=$?
+          # Retrait des règles de test, quoi qu'il se soit passé.
+          for r in "${regles[@]}"; do
+            p=${r%%|*}; a=${r#*|}
+            # shellcheck disable=SC2086
+            sudo iptables -D OUTPUT -p "$p" --dport 53 $a -j DROP
+          done
+          sudo iptables -S OUTPUT | grep -c -e 'dport 53' || true
+          apres=$(resolvectl dns "$iface")
+          cat sortie.log
+          echo "code=$code ; DNS après : $apres"
+          erreurs=0
+          [ "$avant" = "$apres" ] || { echo 'ERREUR : DNS non restauré à l identique'; erreurs=1; }
+          spontane=0; grep -q 'REPLI DNS ACTIVÉ' sortie.log && spontane=1
+          case "$scenario" in
+            normal) [ "$code" = 0 ] || { echo 'ERREUR : le cas normal doit réussir'; erreurs=1; }
+                    echo "repli déclenché spontanément dans le cas normal : $spontane" ;;
+            repli)  [ "$code" = 0 ] && [ "$spontane" = 1 ] || { echo 'ERREUR : repli attendu et succès'; erreurs=1; } ;;
+            echec)  [ "$code" != 0 ] && grep -q 'échec persistant' sortie.log || { echo 'ERREUR : échec contrôlé attendu (job rouge + diagnostic)'; erreurs=1; } ;;
+          esac
+          exit "$erreurs"
