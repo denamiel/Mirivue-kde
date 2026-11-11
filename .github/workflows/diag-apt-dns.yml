@@ -38,10 +38,36 @@ jobs:
           done
           echo '--- HTTP anonyme vers le miroir'
           curl -sS -m 15 -o /dev/null -w 'code HTTP : %{http_code}\n' http://azure.archive.ubuntu.com/ubuntu/dists/ || echo 'ECHEC curl'
-      - name: apt-get update (une seule tentative, bornée)
+      - name: Même nom, résolveur local contre résolveurs publics (diagnostic de cause)
         run: |
+          h=azure.archive.ubuntu.com
+          echo "--- résolveur local (127.0.0.53)"
+          resolvectl query "$h" 2>&1 | head -n 4 || true
+          for srv in 168.63.129.16 8.8.8.8 1.1.1.1; do
+            echo "--- serveur $srv"
+            timeout 8 python3 - "$srv" "$h" <<'PY' || echo 'ECHEC'
+          import socket, struct, sys
+          srv, nom = sys.argv[1], sys.argv[2]
+          q = struct.pack('>HHHHHH', 0x1234, 0x0100, 1, 0, 0, 0)
+          q += b''.join(bytes([len(p)]) + p.encode() for p in nom.split('.')) + b'\0' + struct.pack('>HH', 1, 1)
+          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          s.settimeout(5)
+          s.sendto(q, (srv, 53))
+          r = s.recv(512)
+          rcode = r[3] & 15
+          print('rcode', rcode, '(0 = succès, 2 = SERVFAIL, 3 = NXDOMAIN) ; réponses :', struct.unpack('>H', r[6:8])[0])
+          PY
+          done
+      - name: apt-get update (une seule tentative, bornée ; échec si un miroir est injoignable)
+        run: |
+          # apt-get update renvoie 0 même quand tout échoue (avertissements « W: ») :
+          # l'échec est donc détecté sur le contenu du journal.
           code=0
           timeout 150 sudo apt-get -o Acquire::Retries=0 update > apt-update.log 2>&1 || code=$?
           tail -n 15 apt-update.log
+          if grep -q -e '^Err:' -e 'Temporary failure resolving' apt-update.log; then
+            echo 'ÉCHEC DÉTECTÉ : au moins un miroir est injoignable (voir journal)'
+            code=1
+          fi
           echo "code apt : $code"
           exit "$code"
