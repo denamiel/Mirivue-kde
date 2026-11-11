@@ -34,7 +34,7 @@ sudo mkdir -p "$travail/out" "$travail/meta"
 # Clé Fedora 45 épinglée : extraite du trousseau déjà contrôlé par recuperer_image.sh (empreinte vérifiée).
 gnupg=$(mktemp -d); chmod 700 "$gnupg"
 GNUPGHOME=$gnupg gpg --batch --import "$(dirname "$iso")/fedora.gpg" 2>/dev/null
-GNUPGHOME=$gnupg gpg --batch --export "$CLE_EMPREINTE" > "$travail/cle.gpg"
+GNUPGHOME=$gnupg gpg --batch --armor --export "$CLE_EMPREINTE" > "$travail/cle.gpg"
 [ -s "$travail/cle.gpg" ] || { echo "clé épinglée $CLE_EMPREINTE absente de fedora.gpg" >&2; exit 1; }
 rm -rf "$gnupg"
 sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" -v "$travail/meta:/meta" -v "$travail/cle.gpg:/cle.gpg:ro" fedora:45 bash -euo pipefail -c '

@@ -155,8 +155,10 @@ jobs:
           erreurs=0
           pgrep -a qemu && { echo 'ERREUR : processus QEMU restant' ; erreurs=1; }
           ls -d "$RUNNER_TEMP"/plasma-vm-* 2>/dev/null && { echo 'ERREUR : répertoire temporaire de la VM non effacé'; erreurs=1; }
-          git status --porcelain | grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' > "$RUNNER_TEMP/git-apres.txt"
-          grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' "$RUNNER_TEMP/git-avant.txt" | diff - "$RUNNER_TEMP/git-apres.txt" \
+          # pipefail est actif : grep -v sort en 1 quand il ne reste aucune ligne (cas normal).
+          filtre() { grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' || true; }
+          git status --porcelain | filtre > "$RUNNER_TEMP/git-apres.txt"
+          filtre < "$RUNNER_TEMP/git-avant.txt" | diff - "$RUNNER_TEMP/git-apres.txt" \
             || { echo 'ERREUR : le dépôt de travail a été modifié'; erreurs=1; }
           { echo '### État de l hôte après la VM'; echo "- /dev/kvm : $(cat artefacts-vm/kvm-avant.txt) → $(cat artefacts-vm/kvm-apres.txt)";
             echo "- erreurs de nettoyage : $erreurs"; } | tee -a "$GITHUB_STEP_SUMMARY" > artefacts-vm/etat-hote.md

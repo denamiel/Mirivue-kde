@@ -9,6 +9,6 @@ set -euo pipefail
 cache=${ISO_CACHE_DIR:-$HOME/iso-cache}
 mkdir -p "$cache"
 exec docker run --rm --device /dev/kvm \
-  -e RUNNER_TEMP -e PAQUETS="qemu-system-x86-core xorriso netpbm-progs python3 kmod systemd edk2-ovmf" \
+  -e RUNNER_TEMP -e PAQUETS="qemu-system-x86-core qemu-device-display-virtio-vga qemu-device-display-virtio-gpu xorriso netpbm-progs python3 kmod systemd edk2-ovmf" \
   -v "$PWD:$PWD" -v "$cache:$cache:ro" -v "$RUNNER_TEMP:$RUNNER_TEMP" -w "$PWD" \
   fedora:45 bash -euo pipefail -c 'dnf -y -q --setopt=install_weak_deps=False install $PAQUETS >/dev/null && exec "$@"' _ "$@"
