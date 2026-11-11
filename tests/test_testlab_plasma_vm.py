@@ -226,5 +226,139 @@ class TestGardesSecurite(unittest.TestCase):
         self.assertIn("default='enforcing'", source)
 
 
+def mesures_saisie_ok():
+    m = mesures_ok()
+    m.update(saisie_dossier_cree='oui', saisie_proprietaire='liveuser',
+             saisie_contenu_alpha='Dossier TestLab 1 a.txt', saisie_fichier_intact='oui')
+    return m
+
+
+class QmpFactice:
+    def __init__(self):
+        self.appels = []
+
+    def commande(self, nom, **args):
+        self.appels.append((nom, args))
+        return {'return': {}}
+
+
+class TestSaisie(unittest.TestCase):
+    CAPT = CAPTURES + [{'jalon': j, 'valide': True, 'detail': 'ok', 't_s': 1.0} for j in pilote.JALONS_SAISIE]
+
+    def verdict(self, m, captures=None):
+        return pilote.verdict(m, ATTENDU, captures=self.CAPT if captures is None else captures, saisie=True)
+
+    def test_cas_nominal(self):
+        self.assertEqual(self.verdict(mesures_saisie_ok()), [])
+
+    def test_chaque_alteration_est_detectee(self):
+        for cle, valeur in (('saisie_dossier_cree', 'non'), ('saisie_proprietaire', 'root'),
+                            ('saisie_contenu_alpha', 'a.txt'), ('saisie_fichier_intact', 'non')):
+            m = mesures_saisie_ok()
+            m[cle] = valeur
+            self.assertTrue(self.verdict(m), cle)
+
+    def test_mesures_absentes_sont_un_echec(self):
+        self.assertTrue(self.verdict(mesures_ok()))
+
+    def test_captures_avant_apres_exigees(self):
+        self.assertTrue(self.verdict(mesures_saisie_ok(), captures=CAPTURES))
+
+    def test_sans_option_la_saisie_nest_pas_exigee(self):
+        self.assertEqual(pilote.verdict(mesures_ok(), ATTENDU, captures=CAPTURES), [])
+
+    def test_caracteres_de_saisie(self):
+        self.assertEqual(pilote.qcodes_du_caractere('D'), ['shift', 'd'])
+        self.assertEqual(pilote.qcodes_du_caractere('a'), ['a'])
+        self.assertEqual(pilote.qcodes_du_caractere('1'), ['1'])
+        self.assertEqual(pilote.qcodes_du_caractere(' '), ['spc'])
+        with self.assertRaises(pilote.ErreurPilote):
+            pilote.qcodes_du_caractere('é')
+
+    def test_sequence_qmp_clavier_souris(self):
+        q = QmpFactice()
+        with mock.patch.object(pilote.time, 'sleep'):
+            pilote.saisie_dossier(q)
+        noms = [n for n, _ in q.appels]
+        self.assertEqual(noms.count('input-send-event'), 3)   # déplacement, appui, relâchement
+        touches = [[k['data'] for k in a['keys']] for n, a in q.appels if n == 'send-key']
+        self.assertIn(['ctrl', 'shift', 'n'], touches)
+        self.assertEqual(touches[-1], ['ret'])
+        saisi = ''.join(t[-1] if t != ['spc'] else ' ' for t in touches[4:-1])
+        self.assertEqual(saisi, pilote.NOM_DOSSIER_SAISI.lower())
+        self.assertTrue(all(a.get('hold-time') for n, a in q.appels if n == 'send-key'))
+
+    def test_saisie_exige_les_paquets(self):
+        with self.assertRaises(SystemExit):
+            pilote.main(['--iso', 'x', '--artefacts', tempfile.mkdtemp(), '--saisie'])
+
+    def test_le_script_invite_ne_cree_pas_le_dossier(self):
+        bloc = (DOSSIER / 'invite.sh').read_text().split('SAISIE ]')[1].split('jalon saisie-apres')[0]
+        for interdit in ('mkdir', 'touch ', 'cp ', 'mv '):
+            self.assertNotIn(interdit, bloc)
+
+    def test_entrees_par_qmp_sans_privilege_kwin(self):
+        source = (DOSSIER / 'pilote.py').read_text()
+        self.assertIn("'usb-tablet'", source)
+        self.assertNotIn('fake_input', source)
+        self.assertNotIn('KWIN_WAYLAND_NO_PERMISSION_CHECKS', source + (DOSSIER / 'invite.sh').read_text())
+
+
+_spec_s = importlib.util.spec_from_file_location('stabilite_plasma_vm', DOSSIER / 'stabilite.py')
+stabilite = importlib.util.module_from_spec(_spec_s)
+_spec_s.loader.exec_module(stabilite)
+
+
+def job_essai(conclusion, etape_invite=None, n=1):
+    etapes = [{'name': 'Récupérer et vérifier l\'image Fedora KDE', 'conclusion': 'success'}]
+    if etape_invite is not None:
+        etapes.append({'name': "Démarrer l'invité, installer Mirivue hors ligne et exécuter le scénario",
+                       'conclusion': etape_invite})
+    return {'name': f'{stabilite.PREFIXE_ESSAI} sous Plasma Wayland (essai {n})', 'conclusion': conclusion,
+            'steps': etapes}
+
+
+def execution(rid, date, jobs):
+    return {'id': rid, 'created_at': date, 'head_sha': 'a' * 40, 'jobs': jobs}
+
+
+class TestStabilite(unittest.TestCase):
+    def test_classement_des_essais(self):
+        self.assertEqual(stabilite.classer_essai(job_essai('success', 'success')), 'ok')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', 'failure')), 'echec_testlab')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', None)), 'infra')
+        self.assertEqual(stabilite.classer_essai(job_essai('failure', 'skipped')), 'infra')
+        self.assertEqual(stabilite.classer_essai(job_essai('cancelled', None)), 'ignore')
+        self.assertEqual(stabilite.classer_essai({'name': 'Sonde KVM', 'conclusion': 'success'}), 'ignore')
+
+    def test_essais_paralleles_et_runs_rapproches_ne_sont_pas_independants(self):
+        trois = [job_essai('success', 'success', n) for n in (1, 2, 3)]
+        runs = [execution(1, '2026-11-11T10:00:00Z', trois), execution(2, '2026-11-11T10:30:00Z', trois),
+                execution(3, '2026-11-11T12:00:00Z', trois)]
+        b = stabilite.evaluer(runs, espacement_h=2.0)
+        self.assertEqual(b['executions_independantes'], 2)
+        self.assertEqual(b['essais_comptes'], 6)
+
+    def test_donnees_insuffisantes_jamais_stable(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('success', 'success')])]
+        self.assertTrue(stabilite.evaluer(runs)['verdict'].startswith('INSUFFISANT'))
+
+    def test_un_echec_testlab_rend_le_verdict_instable(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('failure', 'failure')])]
+        self.assertTrue(stabilite.evaluer(runs)['verdict'].startswith('INSTABLE'))
+
+    def test_panne_infra_exclue_du_taux_mais_rapportee(self):
+        runs = [execution(1, '2026-11-11T10:00:00Z', [job_essai('failure', None), job_essai('success', 'success')])]
+        b = stabilite.evaluer(runs)
+        self.assertEqual((b['essais_comptes'], len(b['pannes_infra'])), (1, 1))
+
+    def test_seuil_atteint_seulement_avec_assez_d_essais_et_d_etalement(self):
+        trois = [job_essai('success', 'success', n) for n in (1, 2, 3)]
+        runs = [execution(i, f'2026-11-{11 + i // 3:02d}T{(i % 3) * 8:02d}:00:00Z', trois) for i in range(10)]
+        b = stabilite.evaluer(runs, espacement_h=2.0)
+        self.assertEqual(b['essais_comptes'], 30)
+        self.assertTrue(b['verdict'].startswith('SEUIL ATTEINT'), b)
+
+
 if __name__ == '__main__':
     unittest.main()

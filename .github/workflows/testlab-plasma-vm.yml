@@ -47,6 +47,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: sonde-kvm
           path: artefacts
 
@@ -85,6 +86,7 @@ jobs:
           ls -l dist/rpms/x86_64
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: rpm-vm-fedora-45
           path: dist/rpms/x86_64/mirivue-kde-*.rpm
           if-no-files-found: error
@@ -166,7 +168,85 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: vm-mirivue-${{ matrix.essai }}
+          path: artefacts-vm
+
+  vm-saisie:
+    name: VM Fedora KDE — opération de fichier au clavier/souris (prototype informatif)
+    needs: [sonde-kvm, tests-pilote, rpm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ouvrir /dev/kvm (runner éphémère uniquement)
+        timeout-minutes: 5
+        run: |
+          mkdir -p artefacts-vm
+          stat -c 'avant : %n %a %U:%G' /dev/kvm | tee artefacts-vm/kvm-avant.txt
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          git status --porcelain > "$RUNNER_TEMP/git-avant.txt"
+      - uses: actions/cache@v4
+        with:
+          path: ~/iso-cache
+          key: iso-${{ hashFiles('tests/testlab/plasma_vm/image.env') }}
+      - name: Récupérer et vérifier l'image Fedora KDE (signature + SHA-256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-vm-fedora-45
+          path: rpm-commit
+      - name: Dépôt RPM hors ligne (delta par rapport à l'ISO, signatures vérifiées)
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/preparer_depot.sh ~/iso-cache/"$ISO_NOM" "$PWD/rpm-commit" "$PWD/depot" 2>&1 | tee depot.log
+          (cd depot && ls -l repo | sed 's/^/ /') > artefacts-vm/depot-liste.txt
+          cp depot/attendu.json depot.log artefacts-vm/
+      - name: Démarrer l'invité, installer Mirivue hors ligne, saisir au clavier/souris (QMP)
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/conteneur.sh python3 tests/testlab/plasma_vm/pilote.py \
+            --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-vm \
+            --paquets "$PWD/depot/repo" --attendu "$PWD/depot/attendu.json" --delai 1500 --saisie
+      - name: Résumé
+        if: always()
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" artefacts-vm 2>/dev/null || true
+          cat artefacts-vm/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'Aucun résumé produit.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Vérifier l'état de l'hôte après la VM (nettoyage, permissions, aucune trace)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          stat -c 'après : %n %a %U:%G' /dev/kvm | tee artefacts-vm/kvm-apres.txt
+          erreurs=0
+          pgrep -a qemu && { echo 'ERREUR : processus QEMU restant' ; erreurs=1; }
+          ls -d "$RUNNER_TEMP"/plasma-vm-* 2>/dev/null && { echo 'ERREUR : répertoire temporaire de la VM non effacé'; erreurs=1; }
+          # pipefail est actif : grep -v sort en 1 quand il ne reste aucune ligne (cas normal).
+          filtre() { grep -v -e '^?? artefacts-vm/' -e '^?? depot' -e '^?? rpm-commit/' || true; }
+          git status --porcelain | filtre > "$RUNNER_TEMP/git-apres.txt"
+          filtre < "$RUNNER_TEMP/git-avant.txt" | diff - "$RUNNER_TEMP/git-apres.txt" \
+            || { echo 'ERREUR : le dépôt de travail a été modifié'; erreurs=1; }
+          { echo '### État de l hôte après la VM'; echo "- /dev/kvm : $(cat artefacts-vm/kvm-avant.txt) → $(cat artefacts-vm/kvm-apres.txt)";
+            echo "- erreurs de nettoyage : $erreurs"; } | tee -a "$GITHUB_STEP_SUMMARY" > artefacts-vm/etat-hote.md
+          exit $erreurs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true
+          name: vm-saisie
           path: artefacts-vm
 
   vm-echec-force:
@@ -219,5 +299,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: vm-echec-force
           path: artefacts-echec
