@@ -37,8 +37,9 @@ sudo docker run --rm -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$t
   dnf -y --installroot=/iso-root --use-host-config --releasever=45 --setopt=install_weak_deps=False \
       --setopt=keepcache=1 --setopt=cachedir=/cache install --downloadonly /in/mirivue-kde-*.rpm 2>&1 | tail -n 40
   # dnf5 range les RPM téléchargés dans son cache : on les rassemble à plat.
-  find /cache /iso-root/var/cache /var/cache -name "*.rpm" -type f 2>/dev/null | while read -r f; do [ -e "/out/$(basename "$f")" ] || cp "$f" /out/; done
-  echo "RPM téléchargés (hors Mirivue) : $(ls /out/*.rpm 2>/dev/null | wc -l)"
+  { find /cache /iso-root/var/cache /var/cache -name "*.rpm" -type f 2>/dev/null || true; } | while read -r f; do [ -e "/out/$(basename "$f")" ] || cp "$f" /out/; done
+  n=$(ls /out/*.rpm 2>/dev/null | wc -l); echo "RPM téléchargés (hors Mirivue) : $n"
+  [ "$n" -ge 7 ] || { echo "dépendances attendues non téléchargées ($n)" >&2; exit 1; }
   ls /out | head -n 60
   # Signatures : toute RPM Fedora doit être signée par la clé Fedora 45 ; seule Mirivue est non signée.
   rpmkeys --import /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-primary
