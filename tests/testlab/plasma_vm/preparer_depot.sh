@@ -32,7 +32,13 @@ sudo cp -a "$racine/etc/os-release" "$travail/iso-root/etc/os-release" 2>/dev/nu
 echo "paquets installés dans l'ISO : $(sudo rpm --dbpath "$travail/iso-root/usr/lib/sysimage/rpm" -qa 2>/dev/null | wc -l || true)"
 nb=$(ls "$rpmdir"/mirivue-kde-*.rpm | wc -l); [ "$nb" = 1 ] || { echo "il faut exactement 1 RPM mirivue-kde, trouvé $nb" >&2; exit 1; }
 sudo mkdir -p "$travail/out"
-sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" fedora:45 bash -euo pipefail -c '
+# Clé Fedora 45 épinglée : extraite du trousseau déjà contrôlé par recuperer_image.sh (empreinte vérifiée).
+gnupg=$(mktemp -d); chmod 700 "$gnupg"
+GNUPGHOME=$gnupg gpg --batch --import "$(dirname "$iso")/fedora.gpg" 2>/dev/null
+GNUPGHOME=$gnupg gpg --batch --export "$CLE_EMPREINTE" > "$travail/cle.gpg"
+[ -s "$travail/cle.gpg" ] || { echo "clé épinglée $CLE_EMPREINTE absente de fedora.gpg" >&2; exit 1; }
+rm -rf "$gnupg"
+sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" -v "$travail/cle.gpg:/cle.gpg:ro" fedora:45 bash -euo pipefail -c '
   dnf -y install createrepo_c rpm >/dev/null
   mkdir -p /cache
   dnf -y --installroot=/iso-root --use-host-config --releasever=45 --setopt=install_weak_deps=False \
@@ -43,8 +49,7 @@ sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/is
   [ "$n" -ge 1 ] || { echo "dépendances attendues non téléchargées ($n)" >&2; exit 1; }
   ls /out | head -n 60
   # Signatures : toute RPM Fedora doit être signée par la clé Fedora 45 épinglée (image.env) ; seule Mirivue est non signée.
-  ls /etc/pki/rpm-gpg | grep -i "fedora-45" || { echo "clés Fedora 45 introuvables" >&2; ls /etc/pki/rpm-gpg >&2; exit 1; }
-  for k in /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-*; do rpmkeys --import "$k" 2>&1 || true; done
+  rpmkeys --import /cle.gpg
   id_cle=$(echo "$CLE_EMPREINTE" | tail -c 17 | tr A-F a-f)
   for f in /out/*.rpm; do
     case "$f" in */mirivue-kde-*) continue;; esac
