@@ -1,25 +1,37 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Exécuté EN ROOT dans l'invité jetable (systemd.run), sortie sur la console série.
-# Attend la session Plasma de liveuser, relève des preuves, puis éteint l'invité.
+# Exécuté EN ROOT dans l'invité jetable, sortie sur la console série.
+# 1. Attend la session Plasma de liveuser et relève des preuves de session.
+# 2. Si un dépôt RPM hors ligne est monté (/mnt/t/repo) : installe Mirivue,
+#    le lance sans DISPLAY, prouve son backend Wayland natif et interagit avec
+#    lui par org.freedesktop.FileManager1.
+# 3. Éteint l'invité. Aucun secret ; rien n'est lu hors de l'invité.
 echo '=== TESTLAB-INVITE-DEBUT ==='
+media=/mnt/t
 uid=$(id -u liveuser)
 rt=/run/user/$uid
 dans_session() { runuser -u liveuser -- env XDG_RUNTIME_DIR=$rt DBUS_SESSION_BUS_ADDRESS=unix:path=$rt/bus "$@"; }
+jalon() { echo "TESTLAB-JALON $1"; sleep "${2:-6}"; }
+proc_pid() { pgrep -u liveuser -f "(^|/)$1( |\$)" | head -n1; }
+env_de() { tr '\0' '\n' < "/proc/$1/environ" | sed -n "s/^$2=//p"; }
+
 debut=$SECONDS
-# Invité jetable uniquement : pas de verrouillage d'écran pendant les captures.
 dans_session kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false 2>&1
-dans_session qdbus6 org.freedesktop.ScreenSaver /ScreenSaver SetActive false >/dev/null 2>&1
 sleep 5
 echo '--- travaux systemd en attente ---'; systemctl list-jobs --no-pager 2>&1 | head -20
 echo '--- unités en échec ---'; systemctl --failed --no-pager --plain 2>&1 | head -20
-echo '--- display-manager ---'; systemctl status display-manager --no-pager 2>&1 | head -15
 while (( SECONDS - debut < 420 )); do
   pgrep -x plasmashell >/dev/null && pgrep -x kwin_wayland >/dev/null && [ -S $rt/bus ] && break
   sleep 3
 done
 echo "attente_s=$((SECONDS-debut))"
 sleep 20   # laisser les services de session se stabiliser
+if [ -f $media/FORCER_ECHEC ]; then
+  # Test négatif : l'échec doit être DÉTECTÉ par le pilote (job rouge + rapport).
+  echo "forcer_echec=$(cat $media/FORCER_ECHEC)"
+  dans_session systemctl --user stop plasma-plasmashell.service 2>&1
+  pkill -u liveuser -f '(^|/)plasmashell( |$)'; sleep 3
+fi
 echo "os=$(. /etc/os-release; echo "$PRETTY_NAME")"
 echo "noyau=$(uname -r)"
 echo "selinux=$(getenforce 2>&1)"
@@ -27,26 +39,117 @@ sid=$(loginctl list-sessions --no-legend | awk '$3=="liveuser"{print $1; exit}')
 echo "session_id=${sid:-aucune}"
 [ -n "$sid" ] && for p in Type Class State Remote Desktop; do echo "session_$p=$(loginctl show-session "$sid" -p $p --value)"; done
 for proc in plasmashell kwin_wayland xdg-desktop-portal xdg-desktop-portal-kde kded6 ksmserver Xwayland; do
-  # pgrep -x tronque à 15 caractères : on compare le nom exact de l'exécutable.
-  pid=$(pgrep -u liveuser -f "(^|/)${proc}( |\$)" | head -n1)
+  pid=$(proc_pid "$proc")
   if [ -n "$pid" ]; then
     maps=/proc/$pid/maps
-    qtw=$(grep -c 'libqwayland' $maps 2>/dev/null); qtx=$(grep -c 'libqxcb' $maps 2>/dev/null)
-    echo "proc_$proc=present pid=$pid qt_wayland_maps=${qtw:-0} qt_xcb_maps=${qtx:-0}"
+    echo "proc_$proc=present pid=$pid qt_wayland_maps=$(grep -c 'libqwayland' $maps 2>/dev/null) qt_xcb_maps=$(grep -c 'libqxcb' $maps 2>/dev/null)"
   else
     echo "proc_$proc=absent"
   fi
 done
-pid=$(pgrep -u liveuser -f '(^|/)plasmashell( |$)' | head -n1)
-[ -n "$pid" ] && echo "plasmashell_XDG_SESSION_TYPE=$(tr '\0' '\n' < /proc/$pid/environ | sed -n 's/^XDG_SESSION_TYPE=//p')"
-[ -n "$pid" ] && echo "plasmashell_WAYLAND_DISPLAY=$(tr '\0' '\n' < /proc/$pid/environ | sed -n 's/^WAYLAND_DISPLAY=//p')"
-[ -n "$pid" ] && echo "plasmashell_DISPLAY=$(tr '\0' '\n' < /proc/$pid/environ | sed -n 's/^DISPLAY=//p')"
+pid=$(proc_pid plasmashell)
+if [ -n "$pid" ]; then
+  echo "plasmashell_XDG_SESSION_TYPE=$(env_de "$pid" XDG_SESSION_TYPE)"
+  echo "plasmashell_WAYLAND_DISPLAY=$(env_de "$pid" WAYLAND_DISPLAY)"
+  echo "plasmashell_DISPLAY=$(env_de "$pid" DISPLAY)"
+fi
 for nom in org.kde.KWin org.kde.plasmashell org.freedesktop.portal.Desktop org.freedesktop.impl.portal.desktop.kde org.kde.kded6 org.freedesktop.Notifications; do
   if dans_session busctl --user status "$nom" >/dev/null 2>&1; then echo "dbus_$nom=present"; else echo "dbus_$nom=absent"; fi
 done
 echo "plasma_workspace_rpm=$(rpm -q plasma-workspace 2>&1)"
 echo "qt6_wayland_rpm=$(rpm -q qt6-qtwayland 2>&1)"
 echo "kwin_version=$(kwin_wayland --version 2>&1 | head -n1)"
+jalon session 4
+
+if [ -d $media/repo ]; then
+  echo '--- scénario Mirivue ---'
+  echo "reseau=$(timeout 6 curl -sS -o /dev/null -m 4 https://fedoraproject.org >/dev/null 2>&1 && echo present || echo absent)"
+  echo "rpm_sha256_media=$(sha256sum $media/repo/mirivue-kde-*.rpm | cut -d' ' -f1)"
+  dnf -y --setopt=reposdir=/nonexistent --repofrompath=lab,file://$media/repo \
+      --setopt=lab.gpgcheck=0 --setopt=install_weak_deps=False install mirivue-kde > /tmp/dnf-install.log 2>&1
+  echo "dnf_install_code=$?"
+  echo '--- fin du journal dnf ---'; tail -n 15 /tmp/dnf-install.log
+  echo "mirivue_nevra=$(rpm -q --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}' mirivue-kde 2>&1)"
+  echo "mirivue_version=$(dans_session mirivue-kde --version 2>&1 | tail -n1)"
+
+  # Dossiers jetables de l'invité, sans lien avec aucune donnée réelle.
+  base=/home/liveuser/testlab-mirivue
+  dans_session mkdir -p $base/alpha $base/beta
+  dans_session sh -c "echo alpha > $base/alpha/a.txt; echo beta > $base/beta/b.txt"
+  # Mirivue devient le gestionnaire de fichiers par défaut DE CETTE SESSION JETABLE :
+  # c'est la condition pour qu'il possède org.freedesktop.FileManager1.
+  dans_session xdg-mime default org.pdenams.Mirivue.Qt.desktop inode/directory
+  echo "gestionnaire_defaut=$(dans_session xdg-mime query default inode/directory)"
+
+  # Environnement de la session réelle, SANS DISPLAY/XAUTHORITY/QT_QPA_PLATFORM :
+  # aucun repli XWayland n'est possible ; Qt choisit lui-même son backend.
+  mapfile -d '' -t env_session < /proc/$(proc_pid plasmashell)/environ
+  env_app=()
+  for v in "${env_session[@]}"; do
+    case $v in DISPLAY=*|XAUTHORITY=*|QT_QPA_PLATFORM=*) ;; *) env_app+=("$v");; esac
+  done
+  runuser -u liveuser -- env -i "${env_app[@]}" sh -c \
+    "nohup mirivue-kde $base/alpha > /tmp/mirivue.out 2>&1 &"
+
+  cat > /tmp/tl-fenetres.js <<'JS'
+workspace.windowList().forEach(function (w) {
+  print('TESTLAB-WIN pid=' + w.pid + ' class=' + w.resourceClass + ' caption=' + w.caption);
+});
+JS
+  chmod 644 /tmp/tl-fenetres.js
+  fenetres() {  # lignes TESTLAB-WIN de l'état courant de KWin
+    local n
+    n=$(dans_session busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss /tmp/tl-fenetres.js tlwin 2>/dev/null | awk '{print $2}')
+    dans_session busctl --user call org.kde.KWin /Scripting/Script$n org.kde.kwin.Script run >/dev/null 2>&1
+    sleep 1
+    journalctl _UID=$uid --since "-4s" --no-pager -o cat 2>/dev/null | grep -o 'TESTLAB-WIN .*'
+    dans_session busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s tlwin >/dev/null 2>&1
+  }
+  ligne=''
+  for _ in $(seq 1 30); do
+    ligne=$(fenetres | grep -i 'class=.*mirivue\|caption=.*Mirivue' | head -n1)
+    [ -n "$ligne" ] && break
+    sleep 3
+  done
+  echo "mirivue_fenetre=${ligne#TESTLAB-WIN }"
+  mpid=$(echo "$ligne" | sed -n 's/.*pid=\([0-9]*\).*/\1/p')
+  echo "mirivue_pid=$mpid"
+  if [ -n "$mpid" ]; then
+    echo "mirivue_cmdline=$(tr '\0' ' ' < /proc/$mpid/cmdline)"
+    echo "mirivue_env_DISPLAY=$(env_de "$mpid" DISPLAY)"
+    echo "mirivue_env_QT_QPA_PLATFORM=$(env_de "$mpid" QT_QPA_PLATFORM)"
+    echo "mirivue_XDG_SESSION_TYPE=$(env_de "$mpid" XDG_SESSION_TYPE)"
+    echo "mirivue_qt_wayland_maps=$(grep -c 'libqwayland' /proc/$mpid/maps)"
+    echo "mirivue_qt_xcb_maps=$(grep -c 'libqxcb' /proc/$mpid/maps)"
+    echo "mirivue_sockets_x11=$(ss -xpn 2>/dev/null | grep 'X11-unix' | grep -c "pid=$mpid,")"
+    echo "mirivue_sockets_wayland=$(ss -xpn 2>/dev/null | grep 'wayland-' | grep -c "pid=$mpid,")"
+    echo "mirivue_bus_instance=$(dans_session busctl --user list --no-legend 2>/dev/null | grep -c 'org.pdenams.Mirivue.Instance')"
+    echo "fm1_pid=$(dans_session busctl --user status org.freedesktop.FileManager1 2>/dev/null | sed -n 's/^PID=//p')"
+  fi
+  jalon mirivue-ouvert 8
+
+  # Interaction : une autre application de la session demande à son gestionnaire de
+  # fichiers (Mirivue, propriétaire de FileManager1) d'ouvrir le dossier « beta ».
+  echo "interaction_avant=$(fenetres | grep -i 'caption=.*Mirivue' | head -n1)"
+  dans_session busctl --user call org.freedesktop.FileManager1 /org/freedesktop/FileManager1 \
+      org.freedesktop.FileManager1 ShowFolders ass 1 "file://$base/beta" "" 2>&1
+  echo "interaction_appel_code=$?"
+  titre=''
+  for _ in $(seq 1 15); do
+    titre=$(fenetres | grep -i 'caption=beta.*Mirivue' | head -n1)
+    [ -n "$titre" ] && break
+    sleep 2
+  done
+  echo "interaction_titre=${titre#TESTLAB-WIN }"
+  [ -n "$titre" ] && echo 'interaction_ok=oui' || echo 'interaction_ok=non'
+  jalon interaction 8
+
+  [ -n "$mpid" ] && kill -TERM "$mpid" 2>/dev/null
+  sleep 5
+  echo "mirivue_vivant_apres_term=$([ -n "$mpid" ] && kill -0 "$mpid" 2>/dev/null && echo oui || echo non)"
+  echo '--- sortie de Mirivue ---'; tail -n 15 /tmp/mirivue.out
+fi
+
 echo '--- journal utilisateur (erreurs) ---'
 journalctl _UID=$uid -p err --no-pager -n 40 2>&1 | cut -c1-220
 echo '=== TESTLAB-INVITE-FIN ==='

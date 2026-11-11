@@ -1,14 +1,18 @@
 name: TestLab Plasma VM (informatif)
 # Étude de faisabilité (issue #12). Distinct de fedora-package.yml : aucune
 # dépendance de publication, aucun contrôle obligatoire. Pas de secrets.
+# Chaque job tourne sur un runner GitHub éphémère ; la VM invitée n'a pas de réseau.
 on:
   pull_request:
     paths:
       - '.github/workflows/testlab-plasma-vm.yml'
       - 'tests/testlab/plasma_vm/**'
+      - 'tests/test_testlab_plasma_vm.py'
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  ISO_CACHE: ~/iso-cache
 jobs:
   sonde-kvm:
     name: Sonde KVM du runner hébergé
@@ -44,41 +48,144 @@ jobs:
         with:
           name: sonde-kvm
           path: artefacts
-  vm-plasma:
-    name: VM Fedora KDE — démarrage d'une session Plasma Wayland
-    needs: sonde-kvm
+
+  tests-pilote:
+    name: Tests de non-régression du pilote (verdict, journal, captures, échecs)
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Ouvrir /dev/kvm et installer QEMU (runner éphémère uniquement)
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq netpbm
+      - name: Tests unitaires
+        run: python3 -m unittest tests/test_testlab_plasma_vm.py -v
+
+  rpm:
+    name: RPM Mirivue du commit (Fedora 45)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: fedora:45
+    steps:
+      - name: Préparer Fedora
+        run: dnf -y install git rpm-build python3 dnf5-plugins
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Construire le RPM (mêmes commandes que fedora-package.yml)
+        run: |
+          chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+          dnf -y builddep packaging/fedora/mirivue-kde.spec
+          bash packaging/fedora/Preparer-Sources.sh
+          rpmbuild -ba --define "_sourcedir $PWD/packaging/fedora" --define "_rpmdir $PWD/dist/rpms" --define "_srcrpmdir $PWD/dist/srpms" --define "_smp_build_ncpus 2" packaging/fedora/mirivue-kde.spec
+          ls -l dist/rpms/x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-vm-fedora-45
+          path: dist/rpms/x86_64/mirivue-kde-*.rpm
+          if-no-files-found: error
+
+  vm-mirivue:
+    name: VM Fedora KDE — Mirivue RPM sous Plasma Wayland
+    needs: [sonde-kvm, tests-pilote, rpm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ouvrir /dev/kvm et installer les outils (runner éphémère uniquement)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 xorriso netpbm
+          sudo apt-get install -y -qq qemu-system-x86 xorriso netpbm rpm
+      - uses: actions/cache@v4
+        with:
+          path: ~/iso-cache
+          key: iso-${{ hashFiles('tests/testlab/plasma_vm/image.env') }}
       - name: Récupérer et vérifier l'image Fedora KDE (signature + SHA-256)
         shell: bash
         run: |
           set -euo pipefail
-          . tests/testlab/plasma_vm/image.env
-          echo "iso=$ISO_SHA256" >> "$GITHUB_OUTPUT" || true
-          tests/testlab/plasma_vm/recuperer_image.sh "$RUNNER_TEMP/image" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Démarrer l'invité et prouver la session Plasma Wayland
+          tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-vm-fedora-45
+          path: rpm-commit
+      - name: Dépôt RPM hors ligne (delta par rapport à l'ISO, signatures vérifiées)
         shell: bash
         run: |
           set -euo pipefail
           . tests/testlab/plasma_vm/image.env
-          python3 tests/testlab/plasma_vm/pilote.py --iso "$RUNNER_TEMP/image/$ISO_NOM" \
-            --artefacts artefacts-vm --delai 1200
+          tests/testlab/plasma_vm/preparer_depot.sh ~/iso-cache/"$ISO_NOM" "$PWD/rpm-commit" "$PWD/depot" 2>&1 | tee depot.log
+          mkdir -p artefacts-vm
+          (cd depot && ls -l repo | sed 's/^/ /') > artefacts-vm/depot-liste.txt
+          cp depot/attendu.json depot.log artefacts-vm/
+      - name: Démarrer l'invité, installer Mirivue hors ligne et exécuter le scénario
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          python3 tests/testlab/plasma_vm/pilote.py --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-vm \
+            --paquets "$PWD/depot/repo" --attendu "$PWD/depot/attendu.json" --delai 1500
       - name: Résumé
         if: always()
         run: cat artefacts-vm/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'Aucun résumé produit.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: vm-plasma
+          name: vm-mirivue
           path: artefacts-vm
+
+  vm-echec-force:
+    name: Test négatif — un invité saboté doit être détecté (rapport + artefacts)
+    needs: [sonde-kvm, tests-pilote]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ouvrir /dev/kvm et installer les outils (runner éphémère uniquement)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 xorriso netpbm
+      - uses: actions/cache@v4
+        with:
+          path: ~/iso-cache
+          key: iso-${{ hashFiles('tests/testlab/plasma_vm/image.env') }}
+      - name: Récupérer et vérifier l'image Fedora KDE
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache
+      - name: Invité saboté (plasmashell tué) — le pilote DOIT sortir en code 1
+        shell: bash
+        run: |
+          set -uo pipefail
+          . tests/testlab/plasma_vm/image.env
+          python3 tests/testlab/plasma_vm/pilote.py --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-echec \
+            --forcer-echec plasma --delai 900
+          code=$?
+          echo "code du pilote : $code" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Le test réussit seulement si l'échec est détecté, expliqué et documenté.
+          [ "$code" = 1 ] || { echo "échec forcé non détecté comme code 1 (reçu $code)" >&2; exit 1; }
+          python3 - <<'PY'
+          import json
+          r = json.load(open('artefacts-echec/rapport.json'))
+          assert r['code'] == 1 and r['forcer_echec'] == 'plasma', r
+          assert any('plasmashell' in e for e in r['erreurs']), r['erreurs']
+          assert r['captures_valides'] >= 1, 'aucune capture valide pour diagnostiquer'
+          assert (__import__('pathlib').Path('artefacts-echec/console-serie.log').stat().st_size > 1000)
+          print('échec forcé correctement détecté :', r['erreurs'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vm-echec-force
+          path: artefacts-echec
