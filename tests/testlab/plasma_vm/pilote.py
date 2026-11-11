@@ -353,7 +353,7 @@ def main(arguments=None):
                 break
             console.pomper()
             texte = nettoyer(console.texte)
-            for jalon in ('mirivue-ouvert', 'interaction'):
+            for jalon in JALONS_CAPTURE:
                 if f'TESTLAB-JALON {jalon}' in texte and jalon not in faits:
                     faits.add(jalon)
                     rang += 1
@@ -364,7 +364,7 @@ def main(arguments=None):
             if fini_a is None and time.time() - derniere > 30:
                 derniere = time.time()
                 rang += 1
-                capturer(qmp, tmp, art, 'session', rang, t0, captures)
+                capturer(qmp, tmp, art, 'periodique', rang, t0, captures)
             if fini_a and time.time() - fini_a > 20:
                 break
             time.sleep(1)
