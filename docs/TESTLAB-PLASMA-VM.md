@@ -1,6 +1,10 @@
 # TestLab — Session Plasma Wayland complète (étude)
 
-**Statut :** étude et preuve de faisabilité à réaliser. Aucun banc Plasma complet n'est encore validé.
+**Statut :** preuve de faisabilité obtenue, **job informatif** (pas un contrôle obligatoire). Une VM
+Fedora KDE jetable démarre une vraie session Plasma Wayland et y lance le RPM Mirivue du commit testé
+(trois essais verts sur un même commit, voir « Résultats »). Ce n'est pas encore un banc validé :
+aucune interaction clavier/souris, une seule série d'essais, intermittences non mesurées (voir
+« Limites connues »).
 
 Suivi : [issue #12](https://github.com/denamiel/Mirivue-kde/issues/12).
 
@@ -59,10 +63,10 @@ Mirivue** et test négatif tous verts. Le checkout de ce workflow est la référ
 | Invité sans réseau | `reseau=absent` constaté dans l'invité (`curl` en échec) ; `-nic user,restrict=on`. |
 | Mirivue lancé en Wayland natif | Lancé **sans `DISPLAY`, `XAUTHORITY` ni `QT_QPA_PLATFORM`** dans l'environnement exact de la session. Fenêtre `alpha — Mirivue` (classe `org.pdenams.Mirivue.Qt`) vue par KWin (interface publique KRunner + `getWindowInfo`, sans script ni droit particulier). Processus : `XDG_SESSION_TYPE=wayland`, 4 mappings `libqwayland`, 0 `libqxcb`, **1 connexion vers `kwin_wayland`, 0 vers `Xwayland`** (inodes pairs). |
 | Scénario graphique (fichiers jetables) | Dossiers `~/testlab-mirivue/{alpha,beta}` dans l'invité. Mirivue, gestionnaire par défaut **de cette session jetable**, possède `org.freedesktop.FileManager1` (PID = celui de Mirivue). Un appel `ShowFolders` d'un autre client de la session ouvre la fenêtre `beta — Mirivue` (aussi Wayland natif : 0 `xcb`, 0 socket X11, 1 connexion `kwin_wayland`). Arrêt par `SIGTERM` : processus terminé. Captures valides pour les jalons `session`, `mirivue-ouvert`, `interaction`. |
-| Chemin d'échec et diagnostic | Job `vm-echec-force` : `plasmashell` est arrêté dans l'invité ; le pilote doit sortir en **code 1**, avec rapport, captures valides et journal ; le job n'est vert que si c'est le cas (code 3 ⇒ rouge : cela s'est produit lors de la mise au point). Codes : 0 prouvé, 1 preuves invalides, 2 KVM indisponible, 3 invité muet/délai/pilote. Tests unitaires (`tests/test_testlab_plasma_vm.py`, 20 tests) : analyse du journal, verdict sur chaque altération, captures (PPM/PNG/QMP/`pnmtopng`), codes 2 et 3. Runs rouges réels de mise au point conservés dans l'historique. |
+| Chemin d'échec et diagnostic | Job `vm-echec-force` : `plasmashell` est arrêté dans l'invité ; le pilote doit sortir en **code 1**, avec rapport, captures valides et journal ; le job n'est vert que si c'est le cas (code 3 ⇒ rouge : cela s'est produit lors de la mise au point). Codes : 0 prouvé, 1 preuves invalides, 2 KVM indisponible, 3 invité muet/délai/pilote. Tests unitaires (`tests/test_testlab_plasma_vm.py`, 20 tests ; un test de bout en bout des captures est ignoré si `netpbm` est absent et s'exécute dans le job CI) : analyse du journal, verdict sur chaque altération, captures (PPM/PNG/QMP/`pnmtopng`), codes 2 et 3. Runs rouges réels de mise au point conservés dans l'historique. |
 | Nettoyage / hôte | Chaque job VM vérifie après coup : aucun QEMU restant, répertoire temporaire de la VM effacé, arbre de travail inchangé, `/dev/kvm` avant/après (`660`→`666`, seule modification). Aucun nœud DRM de l'hôte n'est utilisé (`virtio-vga` est émulé par QEMU) ; ces vérifications sont dans `etat-hote.md`. |
 | Durée / coût | 3 essais : 190 s, 198 s, 191 s de pilotage (login série ~91–100 s, fenêtre Mirivue ~151–159 s), plus construction du RPM, dépôt hors ligne et ISO (en cache ou 3,5 Go). Minutes de runner standard (dépôt public). |
-| Stabilité | **3/3 verts sur un même commit ; chemin positif jamais rouge une fois les défauts de mise au point corrigés.** Insuffisant pour conclure sur les intermittences : à répéter sur plusieurs commits/jours avant toute promotion. |
+| Stabilité | **3 essais sur 3 verts, lancés en parallèle sur un seul commit (`1f19f7a`).** Les runs précédents du scénario Mirivue (commits `85014f6`, `2eee0aa`, `1b8be71`) étaient rouges pour des défauts de mise au point, corrigés depuis. Une seule série verte ne suffit pas pour conclure sur les intermittences : à répéter sur plusieurs commits et plusieurs jours avant toute promotion. |
 
 ## Architecture et frontière de confiance
 
@@ -95,7 +99,10 @@ Mirivue** et test négatif tous verts. Le checkout de ce workflow est la référ
 - Le checkout du workflow est la référence de fusion de la PR, pas le seul commit de tête.
 - Le verdict ne vérifie pas le fonctionnement des portails au-delà de leur présence.
 - 3 essais verts sur un commit : pas de mesure d'intermittence à long terme ; `clocksource`/délais non exclus.
-- Les workflows existants `fedora-package.yml` (jobs Python) utilisent `apt` et ont échoué pendant la
-  panne DNS ; hors périmètre de cette PR, signalé tel quel.
+- Hors périmètre de cette PR, constaté sans y avoir touché : dans `fedora-package.yml`, les deux jobs
+  « Python » installent des bibliothèques par `apt` (lignes 223-224) et ont échoué sur le run
+  [43054343691](https://github.com/denamiel/Mirivue-kde/actions/runs/43054343691) avec
+  `Temporary failure resolving` (miroirs Ubuntu), alors que les jobs RPM, Xvfb et KWin virtuel de ce
+  même run sont verts. Ce workflow est donc rouge pour une raison d'infrastructure indépendante du TestLab Plasma.
 
 Cette documentation ne revendique pas de validation de Mirivue au-delà de ce scénario minimal.
