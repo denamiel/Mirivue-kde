@@ -31,6 +31,7 @@ class Serie:
                 time.sleep(0.5)
         self.sock.setblocking(False); self.journal = open(journal, 'wb'); self.texte = ''
         self.connecte = False; self.lance = False; self.depuis_login = None
+        self.t0 = time.time(); self.jalons = {}
 
     def pomper(self):
         try:
@@ -39,6 +40,11 @@ class Serie:
                 if not octets: break
                 self.journal.write(octets); self.journal.flush()
                 self.texte += octets.decode(errors='replace')
+                for nom, motif in (('noyau', 'Linux version'), ('virtio_gpu', 'Initialized virtio_gpu'),
+                                   ('gestionnaire_connexion', 'Started plasmalogin'), ('invite_login', 'login: '),
+                                   ('script_debut', 'TESTLAB-INVITE-DEBUT'), ('script_fin', 'TESTLAB-INVITE-FIN')):
+                    if nom not in self.jalons and motif in self.texte:
+                        self.jalons[nom] = round(time.time() - self.t0, 1)
         except BlockingIOError:
             pass
         if not self.connecte and 'login: ' in self.texte[-200:]:
@@ -164,6 +170,7 @@ def main():
         proc.wait()
         shutil.rmtree(tmp, ignore_errors=True)   # invité jetable : tout est effacé
     texte = serie.read_text(errors='replace') if serie.exists() else ''
+    rapport['jalons_s'] = console.jalons if 'console' in dir() else {}
     rapport['console_octets'] = len(texte); rapport['captures'] = capt
     if erreur_pilote: rapport['erreur_pilote'] = erreur_pilote
     rapport['qemu_code_retour'] = proc.returncode
