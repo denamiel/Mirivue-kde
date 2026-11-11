@@ -44,3 +44,41 @@ jobs:
         with:
           name: sonde-kvm
           path: artefacts
+  vm-plasma:
+    name: VM Fedora KDE — démarrage d'une session Plasma Wayland
+    needs: sonde-kvm
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ouvrir /dev/kvm et installer QEMU (runner éphémère uniquement)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 xorriso netpbm
+      - name: Récupérer et vérifier l'image Fedora KDE (signature + SHA-256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          echo "iso=$ISO_SHA256" >> "$GITHUB_OUTPUT" || true
+          tests/testlab/plasma_vm/recuperer_image.sh "$RUNNER_TEMP/image" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Démarrer l'invité et prouver la session Plasma Wayland
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          python3 tests/testlab/plasma_vm/pilote.py --iso "$RUNNER_TEMP/image/$ISO_NOM" \
+            --artefacts artefacts-vm --delai 1200
+      - name: Résumé
+        if: always()
+        run: cat artefacts-vm/resume.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'Aucun résumé produit.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vm-plasma
+          path: artefacts-vm
