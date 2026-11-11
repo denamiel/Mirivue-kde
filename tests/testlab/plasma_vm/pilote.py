@@ -17,6 +17,37 @@ ATTENDUS_PROCESSUS = ['plasmashell', 'kwin_wayland', 'xdg-desktop-portal', 'xdg-
 ATTENDUS_DBUS = ['org.kde.KWin', 'org.freedesktop.portal.Desktop', 'org.freedesktop.impl.portal.desktop.kde']
 
 
+class Serie:
+    """Console série de l'invité : journalisée, et pilotée (connexion liveuser)."""
+    def __init__(self, chemin, journal, delai=30, proc=None):
+        fin = time.time() + delai
+        while True:
+            try:
+                self.sock = socket.socket(socket.AF_UNIX); self.sock.connect(str(chemin)); break
+            except OSError:
+                if proc is not None and proc.poll() is not None:
+                    raise RuntimeError('QEMU a quitté avant d’ouvrir la console série')
+                if time.time() > fin: raise
+                time.sleep(0.5)
+        self.sock.setblocking(False); self.journal = open(journal, 'wb'); self.texte = ''
+        self.connecte = False; self.lance = False; self.depuis_login = None
+
+    def pomper(self):
+        try:
+            while True:
+                octets = self.sock.recv(65536)
+                if not octets: break
+                self.journal.write(octets); self.journal.flush()
+                self.texte += octets.decode(errors='replace')
+        except BlockingIOError:
+            pass
+        if not self.connecte and 'login: ' in self.texte[-200:]:
+            self.sock.send(b'liveuser\n'); self.connecte = True; self.depuis_login = time.time()
+        if self.connecte and not self.lance and time.time() - self.depuis_login > 8:
+            cmd = 'sudo mkdir -p /mnt/t && sudo mount -L TESTLAB /mnt/t && sudo bash /mnt/t/invite.sh\n'
+            self.sock.send(cmd.encode()); self.lance = True
+
+
 class Qmp:
     def __init__(self, chemin, delai=30, proc=None):
         fin = time.time() + delai
@@ -93,26 +124,26 @@ def main():
     rapport['iso_volume_id'] = label
     scripts = tmp / 'scripts'; scripts.mkdir(); shutil.copy(ICI / 'invite.sh', scripts / 'invite.sh')
     subprocess.run(['xorriso', '-as', 'mkisofs', '-V', 'TESTLAB', '-o', str(tmp / 'scripts.iso'), str(scripts)], check=True, capture_output=True)
-    run = "/bin/sh -c 'mkdir -p /mnt/t && mount -L TESTLAB /mnt/t && bash /mnt/t/invite.sh'"
     append = (f'root=live:CDLABEL={label} rd.live.image rd.live.overlay.overlayfs=1 console=ttyS0,115200 '
-              f'enforcing=0 systemd.unit=graphical.target systemd.run="{run}" systemd.run_success_action=none')
+              f'enforcing=0')
     serie = art / 'console-serie.log'
     qemu = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-smp', '4', '-m', o.memoire,
             '-kernel', str(tmp / 'vmlinuz'), '-initrd', str(tmp / 'initrd'), '-append', append,
             '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live,bus=ide.0',
             '-drive', f'file={tmp / "scripts.iso"},media=cdrom,readonly=on,if=none,id=scr', '-device', 'ide-cd,drive=scr,bus=ide.1',
             '-device', 'virtio-vga', '-display', 'none', '-nic', 'user,model=virtio-net-pci,restrict=on',
-            '-serial', f'file:{serie}', '-qmp', f'unix:{tmp / "qmp.sock"},server=on,wait=off',
+            '-serial', f'unix:{tmp / "serie.sock"},server=on,wait=off', '-qmp', f'unix:{tmp / "qmp.sock"},server=on,wait=off',
             '-no-reboot', '-name', 'testlab-plasma']
     (art / 'commande-qemu.txt').write_text(' '.join(qemu) + '\n')
     proc = subprocess.Popen(qemu, stderr=open(art / 'qemu-stderr.log', 'w'))
     capt = 0; derniere = 0; sortie_vue = None
     erreur_pilote = None
     try:
+        console = Serie(tmp / 'serie.sock', serie, proc=proc)
         qmp = Qmp(tmp / 'qmp.sock', proc=proc)
         while time.time() - t0 < o.delai:
             if proc.poll() is not None: break
-            texte = serie.read_text(errors='replace') if serie.exists() else ''
+            console.pomper(); texte = console.texte
             if time.time() - derniere > 30 or ('TESTLAB-INVITE-FIN' in texte and sortie_vue is None):
                 derniere = time.time(); capt += 1
                 ppm = tmp / f'c{capt:03d}.ppm'

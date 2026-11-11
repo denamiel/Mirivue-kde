@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: MIT
 # Exécuté EN ROOT dans l'invité jetable (systemd.run), sortie sur la console série.
 # Attend la session Plasma de liveuser, relève des preuves, puis éteint l'invité.
-exec >/dev/ttyS0 2>&1
 echo '=== TESTLAB-INVITE-DEBUT ==='
 uid=$(id -u liveuser)
 rt=/run/user/$uid
 dans_session() { runuser -u liveuser -- env XDG_RUNTIME_DIR=$rt DBUS_SESSION_BUS_ADDRESS=unix:path=$rt/bus "$@"; }
 debut=$SECONDS
+sleep 5
+echo '--- travaux systemd en attente ---'; systemctl list-jobs --no-pager 2>&1 | head -20
+echo '--- unités en échec ---'; systemctl --failed --no-pager --plain 2>&1 | head -20
+echo '--- display-manager ---'; systemctl status display-manager --no-pager 2>&1 | head -15
 while (( SECONDS - debut < 420 )); do
   pgrep -x plasmashell >/dev/null && pgrep -x kwin_wayland >/dev/null && [ -S $rt/bus ] && break
   sleep 3
