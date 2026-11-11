@@ -17,7 +17,9 @@ mkdir -p "$travail"/{iso,squash,rootfs,iso-root}
 sudo mount -o loop,ro "$iso" "$travail/iso"
 squash=$(sudo find "$travail/iso" -iname 'squashfs.img' | head -n1)
 [ -n "$squash" ] || { echo "squashfs.img introuvable dans l'ISO" >&2; exit 1; }
-sudo mount -t squashfs -o loop,ro "$squash" "$travail/squash"
+echo "type de l'image : $(file -b "$squash" 2>/dev/null || true) ; $(sudo head -c 4 "$squash" | xxd -p)"
+# squashfs ou erofs selon l'image : le noyau détecte le type.
+sudo mount -o loop,ro "$squash" "$travail/squash" || { sudo modprobe erofs 2>&1 || true; sudo mount -o loop,ro "$squash" "$travail/squash"; }
 rootfs=$(sudo find "$travail/squash" -iname 'rootfs.img' | head -n1)
 if [ -n "$rootfs" ]; then sudo mount -o loop,ro "$rootfs" "$travail/rootfs"; racine=$travail/rootfs
 else racine=$travail/squash; fi          # image sans couche ext4 intermédiaire
