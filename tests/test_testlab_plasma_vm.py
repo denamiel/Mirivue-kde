@@ -25,7 +25,9 @@ def mesures_ok():
          'mirivue_nevra': ATTENDU['rpm_nevra'], 'mirivue_fenetre': 'pid=7 class=mirivue caption=alpha — Mirivue',
          'mirivue_pid': '7', 'mirivue_env_DISPLAY': '', 'mirivue_XDG_SESSION_TYPE': 'wayland',
          'mirivue_qt_wayland_maps': '4', 'mirivue_qt_xcb_maps': '0', 'mirivue_sockets_x11': '0',
-         'mirivue_sockets_wayland': '2', 'fm1_pid': '7', 'mirivue_bus_instance': '1', 'interaction_ok': 'oui'}
+         'mirivue_sockets_wayland': '2', 'fm1_pid': '7', 'mirivue_bus_instance': '1', 'interaction_ok': 'oui',
+         'interaction_env_DISPLAY': '', 'interaction_qt_wayland_maps': '4', 'interaction_qt_xcb_maps': '0',
+         'interaction_sockets_x11': '0', 'interaction_sockets_wayland': '1'}
     for p in pilote.ATTENDUS_PROCESSUS:
         m.setdefault(f'proc_{p}', 'present pid=2 qt_wayland_maps=0 qt_xcb_maps=0')
     for n in pilote.ATTENDUS_DBUS:
@@ -68,6 +70,9 @@ class TestVerdict(unittest.TestCase):
             'dnf en échec': ({'dnf_install_code': '1'}, 'installation'),
             'réseau présent': ({'reseau': 'present'}, 'réseau'),
             'interaction non': ({'interaction_ok': 'non'}, 'interaction'),
+            'interaction xcb': ({'interaction_qt_xcb_maps': '1'}, 'interaction'),
+            'interaction x11': ({'interaction_sockets_x11': '1'}, 'XWayland'),
+            'interaction DISPLAY': ({'interaction_env_DISPLAY': ':0'}, 'DISPLAY'),
             'pas de fenêtre': ({'mirivue_fenetre': ''}, 'fenêtre'),
             'selinux permissif': ({'selinux': 'Permissive'}, 'SELinux'),
             'session x11': ({'session_Type': 'x11'}, 'wayland'),

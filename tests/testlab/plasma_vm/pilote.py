@@ -103,7 +103,17 @@ def verdict_mirivue(m, attendu):
         e.append('org.freedesktop.FileManager1 n’appartient pas au processus Mirivue')
     if _entier(m.get('mirivue_bus_instance')) < 1:
         e.append('nom D-Bus d’instance Mirivue absent')
-    if m.get('interaction_ok') != 'oui':
+    if m.get('interaction_ok') == 'oui':
+        # La fenêtre ouverte par FileManager1 doit être Wayland native elle aussi.
+        if m.get('interaction_env_DISPLAY', 'inconnu') != '':
+            e.append('DISPLAY défini pour la fenêtre ouverte par FileManager1')
+        if not (_entier(m.get('interaction_qt_wayland_maps')) > 0 and _entier(m.get('interaction_qt_xcb_maps'), 1) == 0):
+            e.append('fenêtre d’interaction : greffon Qt Wayland non prouvé ou greffon xcb chargé')
+        if _entier(m.get('interaction_sockets_x11'), 1) != 0:
+            e.append('fenêtre d’interaction connectée à XWayland')
+        if _entier(m.get('interaction_sockets_wayland')) < 1:
+            e.append('aucune connexion Wayland observée pour la fenêtre d’interaction')
+    else:
         e.append(f"interaction FileManager1 non constatée ({m.get('interaction_titre', '?')!r})")
     return e
 
@@ -284,7 +294,8 @@ def construire_media(tmp, paquets, forcer_echec):
     scripts = tmp / 'scripts'
     scripts.mkdir()
     shutil.copy(ICI / 'invite.sh', scripts / 'invite.sh')
-    shutil.copy(ICI / 'fenetres.py', scripts / 'fenetres.py')
+    for aux in ('fenetres.py', 'connexions.py'):
+        shutil.copy(ICI / aux, scripts / aux)
     if paquets:
         shutil.copytree(paquets, scripts / 'repo')
     if forcer_echec:

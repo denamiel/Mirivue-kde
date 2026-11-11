@@ -117,8 +117,8 @@ if [ -d $media/repo ]; then
     echo "mirivue_XDG_SESSION_TYPE=$(env_de "$mpid" XDG_SESSION_TYPE)"
     echo "mirivue_qt_wayland_maps=$(grep -c 'libqwayland' /proc/$mpid/maps)"
     echo "mirivue_qt_xcb_maps=$(grep -c 'libqxcb' /proc/$mpid/maps)"
-    echo "mirivue_sockets_x11=$(ss -xpn 2>/dev/null | grep 'X11-unix' | grep -c "pid=$mpid,")"
-    echo "mirivue_sockets_wayland=$(ss -xpn 2>/dev/null | grep 'wayland-' | grep -c "pid=$mpid,")"
+    echo "mirivue_sockets_x11=$(python3 $media/connexions.py "$mpid" Xwayland)"
+    echo "mirivue_sockets_wayland=$(python3 $media/connexions.py "$mpid" kwin_wayland)"
     echo "mirivue_bus_instance=$(dans_session busctl --user list --no-legend 2>/dev/null | grep -c 'org.pdenams.Mirivue.Instance')"
     echo "fm1_pid=$(dans_session busctl --user status org.freedesktop.FileManager1 2>/dev/null | sed -n 's/^PID=//p')"
   fi
@@ -142,6 +142,16 @@ if [ -d $media/repo ]; then
     sleep 2
   done
   echo "interaction_titre=${titre#TESTLAB-WIN }"
+  ipid=$(echo "$titre" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p')
+  if [ -n "$ipid" ]; then
+    # La fenêtre ouverte par l'interaction doit, elle aussi, être Wayland natif.
+    echo "interaction_pid=$ipid"
+    echo "interaction_env_DISPLAY=$(env_de "$ipid" DISPLAY)"
+    echo "interaction_qt_wayland_maps=$(grep -c 'libqwayland' /proc/$ipid/maps)"
+    echo "interaction_qt_xcb_maps=$(grep -c 'libqxcb' /proc/$ipid/maps)"
+    echo "interaction_sockets_x11=$(python3 $media/connexions.py "$ipid" Xwayland)"
+    echo "interaction_sockets_wayland=$(python3 $media/connexions.py "$ipid" kwin_wayland)"
+  fi
   [ -n "$titre" ] && echo 'interaction_ok=oui' || echo 'interaction_ok=non'
   jalon interaction 8
 
