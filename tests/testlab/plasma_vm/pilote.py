@@ -284,6 +284,7 @@ def construire_media(tmp, paquets, forcer_echec):
     scripts = tmp / 'scripts'
     scripts.mkdir()
     shutil.copy(ICI / 'invite.sh', scripts / 'invite.sh')
+    shutil.copy(ICI / 'fenetres.py', scripts / 'fenetres.py')
     if paquets:
         shutil.copytree(paquets, scripts / 'repo')
     if forcer_echec:

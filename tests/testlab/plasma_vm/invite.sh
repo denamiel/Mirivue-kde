@@ -91,28 +91,24 @@ if [ -d $media/repo ]; then
   runuser -u liveuser -- env -i "${env_app[@]}" sh -c \
     "nohup mirivue-kde $base/alpha > /tmp/mirivue.out 2>&1 &"
 
-  cat > /tmp/tl-fenetres.js <<'JS'
-workspace.windowList().forEach(function (w) {
-  print('TESTLAB-WIN pid=' + w.pid + ' class=' + w.resourceClass + ' caption=' + w.caption);
-});
-JS
-  chmod 644 /tmp/tl-fenetres.js
-  fenetres() {  # lignes TESTLAB-WIN de l'état courant de KWin
-    local n
-    n=$(dans_session busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss /tmp/tl-fenetres.js tlwin 2>/dev/null | awk '{print $2}')
-    dans_session busctl --user call org.kde.KWin /Scripting/Script$n org.kde.kwin.Script run >/dev/null 2>&1
-    sleep 1
-    journalctl _UID=$uid --since "-4s" --no-pager -o cat 2>/dev/null | grep -o 'TESTLAB-WIN .*'
-    dans_session busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s tlwin >/dev/null 2>&1
+  fenetres() {  # lignes TESTLAB-WIN de l'état courant de KWin (interface publique KRunner)
+    dans_session python3 $media/fenetres.py "$@" 2>&1
   }
   ligne=''
   for _ in $(seq 1 30); do
-    ligne=$(fenetres | grep -i 'class=.*mirivue\|caption=.*Mirivue' | head -n1)
+    ligne=$(fenetres Mirivue | grep '^TESTLAB-WIN' | head -n1)
     [ -n "$ligne" ] && break
     sleep 3
   done
+  echo '--- diagnostic Mirivue ---'
+  pgrep -af 'mirivue' | cut -c1-200
+  echo "sortie de Mirivue :"; tail -n 20 /tmp/mirivue.out
+  dans_session busctl --user list --no-legend 2>/dev/null | grep -i -e mirivue -e FileManager1 | cut -c1-160
+  fenetres Mirivue
+  echo '--- fin du diagnostic ---'
   echo "mirivue_fenetre=${ligne#TESTLAB-WIN }"
-  mpid=$(echo "$ligne" | sed -n 's/.*pid=\([0-9]*\).*/\1/p')
+  mpid=$(echo "$ligne" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p')
+  [ -n "$mpid" ] || mpid=$(pgrep -u liveuser -f 'python.*mirivue' | head -n1)
   echo "mirivue_pid=$mpid"
   if [ -n "$mpid" ]; then
     echo "mirivue_cmdline=$(tr '\0' ' ' < /proc/$mpid/cmdline)"
@@ -131,9 +127,14 @@ JS
   # Interaction : une autre application de la session demande à son gestionnaire de
   # fichiers (Mirivue, propriétaire de FileManager1) d'ouvrir le dossier « beta ».
   echo "interaction_avant=$(fenetres | grep -i 'caption=.*Mirivue' | head -n1)"
-  dans_session busctl --user call org.freedesktop.FileManager1 /org/freedesktop/FileManager1 \
-      org.freedesktop.FileManager1 ShowFolders ass 1 "file://$base/beta" "" 2>&1
-  echo "interaction_appel_code=$?"
+  proprio=$(dans_session busctl --user status org.freedesktop.FileManager1 2>/dev/null | sed -n 's/^PID=//p')
+  if [ -n "$mpid" ] && [ "$proprio" = "$mpid" ]; then
+    dans_session busctl --user call org.freedesktop.FileManager1 /org/freedesktop/FileManager1 \
+        org.freedesktop.FileManager1 ShowFolders ass 1 "file://$base/beta" "" 2>&1
+    echo "interaction_appel_code=$?"
+  else
+    echo "interaction_appel_code=non-tente (FileManager1 appartient à pid=${proprio:-aucun}, Mirivue pid=${mpid:-aucun})"
+  fi
   titre=''
   for _ in $(seq 1 15); do
     titre=$(fenetres | grep -i 'caption=beta.*Mirivue' | head -n1)
