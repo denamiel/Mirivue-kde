@@ -18,12 +18,14 @@ ATTENDUS_DBUS = ['org.kde.KWin', 'org.freedesktop.portal.Desktop', 'org.freedesk
 
 
 class Qmp:
-    def __init__(self, chemin, delai=30):
+    def __init__(self, chemin, delai=30, proc=None):
         fin = time.time() + delai
         while True:
             try:
                 self.sock = socket.socket(socket.AF_UNIX); self.sock.connect(str(chemin)); break
             except OSError:
+                if proc is not None and proc.poll() is not None:
+                    raise RuntimeError(f'QEMU a quitté (code {proc.returncode}) avant d’ouvrir QMP')
                 if time.time() > fin: raise
                 time.sleep(0.5)
         self.f = self.sock.makefile('rw'); self.f.readline()
@@ -97,7 +99,7 @@ def main():
     serie = art / 'console-serie.log'
     qemu = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-smp', '4', '-m', o.memoire,
             '-kernel', str(tmp / 'vmlinuz'), '-initrd', str(tmp / 'initrd'), '-append', append,
-            '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live,bootindex=0',
+            '-drive', f'file={o.iso},media=cdrom,readonly=on,if=none,id=live', '-device', 'ide-cd,drive=live',
             '-drive', f'file={tmp / "scripts.iso"},media=cdrom,readonly=on,if=none,id=scr', '-device', 'ide-cd,drive=scr',
             '-device', 'virtio-vga', '-display', 'none', '-nic', 'user,model=virtio-net-pci,restrict=on',
             '-serial', f'file:{serie}', '-qmp', f'unix:{tmp / "qmp.sock"},server=on,wait=off',
@@ -105,8 +107,9 @@ def main():
     (art / 'commande-qemu.txt').write_text(' '.join(qemu) + '\n')
     proc = subprocess.Popen(qemu, stderr=open(art / 'qemu-stderr.log', 'w'))
     capt = 0; derniere = 0; sortie_vue = None
+    erreur_pilote = None
     try:
-        qmp = Qmp(tmp / 'qmp.sock')
+        qmp = Qmp(tmp / 'qmp.sock', proc=proc)
         while time.time() - t0 < o.delai:
             if proc.poll() is not None: break
             texte = serie.read_text(errors='replace') if serie.exists() else ''
@@ -123,14 +126,18 @@ def main():
                 time.sleep(3)
             if sortie_vue and time.time() - t0 > sortie_vue + 25: break
             time.sleep(2)
+    except Exception as exc:   # le rapport doit toujours exister
+        erreur_pilote = f'{type(exc).__name__}: {exc}'
     finally:
         if proc.poll() is None: proc.kill()
         proc.wait()
         shutil.rmtree(tmp, ignore_errors=True)   # invité jetable : tout est effacé
     texte = serie.read_text(errors='replace') if serie.exists() else ''
     rapport['console_octets'] = len(texte); rapport['captures'] = capt
+    if erreur_pilote: rapport['erreur_pilote'] = erreur_pilote
+    rapport['qemu_code_retour'] = proc.returncode
     if 'TESTLAB-INVITE-FIN' not in texte:
-        fin(3, f'invité muet ou délai dépassé après {round(time.time()-t0)} s (marqueur final absent ; voir console-serie.log et captures)')
+        fin(3, f'invité muet ou délai dépassé après {round(time.time()-t0)} s (marqueur final absent ; voir console-serie.log et captures)' + (f' ; erreur pilote : {erreur_pilote}' if erreur_pilote else ''))
     mesures = analyser(texte); rapport['mesures'] = mesures
     erreurs = verdict(mesures); rapport['erreurs'] = erreurs
     if erreurs: fin(1, 'preuves insuffisantes : ' + '; '.join(erreurs))
