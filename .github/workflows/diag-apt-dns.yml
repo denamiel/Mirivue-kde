@@ -71,7 +71,7 @@ jobs:
             echec) bloquer ;;                  # plus aucun DNS sortant
           esac
           sudo resolvectl flush-caches
-          export CI_APT_DNS_TENTATIVES=2 CI_APT_DNS_PAUSE=2
+          # valeurs par défaut du script (4 tentatives, 5 s), comme dans le job réel
           code=0
           bash packaging/ci_apt_install.sh libegl1 > sortie.log 2>&1 || code=$?
           # Retrait des règles de test, quoi qu'il se soit passé.

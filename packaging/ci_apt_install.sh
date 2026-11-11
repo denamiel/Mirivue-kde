@@ -44,6 +44,7 @@ diagnostic() {
   echo "interface=${IFACE:-inconnue}"
   resolvectl status 2>&1 | head -n 25
   for h in "${HOTES[@]}"; do printf '%s -> ' "$h"; getent hosts "$h" | head -n1 || echo 'non résolu'; done
+  resolvectl query "${HOTES[0]}" 2>&1 | head -n 6
   echo "::endgroup::"
 }
 
@@ -90,7 +91,8 @@ else
     REPLI_ACTIF=1
     sudo resolvectl dns "$IFACE" "$SERVEUR_REPLI" || { echo '::error::resolvectl a échoué'; diagnostic; exit 1; }
     sudo resolvectl flush-caches
-    if ! resolution_ok; then
+    # systemd-resolved sonde le nouveau serveur : laisser quelques tentatives espacées.
+    if resolution_confirmee_ko; then
       echo '::error::résolution toujours en échec avec le repli : échec persistant'
       diagnostic
       exit 1
