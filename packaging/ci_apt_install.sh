@@ -21,6 +21,7 @@ SERVEUR_REPLI=${CI_APT_DNS_REPLI:-1.1.1.1}
 TENTATIVES=${CI_APT_DNS_TENTATIVES:-4}
 PAUSE=${CI_APT_DNS_PAUSE:-5}
 JOURNAL=$(mktemp)
+IFACE=$(ip -o route get "$SERVEUR_REPLI" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1)
 
 resolution_ok() {
   local h
@@ -49,20 +50,27 @@ diagnostic() {
 }
 
 apt_update_strict() {
-  timeout 180 sudo apt-get -o Acquire::Retries=2 update > "$JOURNAL" 2>&1
-  local code=$?
-  tail -n 15 "$JOURNAL"
-  # apt-get update sort en 0 malgré des miroirs injoignables : contrôle du journal.
-  if grep -q -e '^Err:' -e 'Temporary failure resolving' -e '^W: Failed to fetch' "$JOURNAL"; then
-    echo "::error::apt-get update : au moins un miroir est injoignable (échec réel, pas de faux vert)"
-    return 1
-  fi
-  return "$code"
+  # Délais courts par connexion : un miroir qui n'accepte pas les connexions HTTP est
+  # abandonné vite et APT passe au miroir suivant de sa liste (signatures inchangées).
+  local essai code
+  for essai in 1 2 3; do
+    timeout 150 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 \
+      -o Acquire::https::Timeout=20 update > "$JOURNAL" 2>&1
+    code=$?
+    echo "apt-get update : essai $essai/3, code $code"
+    tail -n 12 "$JOURNAL"
+    # apt-get update sort en 0 malgré des miroirs injoignables : contrôle du journal.
+    if [ "$code" = 0 ] && ! grep -q -e '^Err:' -e 'Temporary failure resolving' -e '^W: Failed to fetch' "$JOURNAL"; then
+      return 0
+    fi
+    sleep 10
+  done
+  echo "::error::apt-get update : échec persistant après 3 essais (code $code), pas de faux vert"
+  return 1
 }
 
 REPLI_ACTIF=0
 DNS_INITIAL=''
-IFACE=''
 restaurer() {
   if [ "$REPLI_ACTIF" = 1 ]; then
     echo "Restauration de la configuration DNS initiale de $IFACE : ${DNS_INITIAL:-<aucun>}"
@@ -80,7 +88,6 @@ if resolution_ok; then
 else
   echo 'Résolution DNS APT en échec : confirmation par tentatives espacées...'
   if resolution_confirmee_ko; then
-    IFACE=$(ip -o route get "$SERVEUR_REPLI" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1)
     if [ -z "$IFACE" ]; then
       echo '::error::interface réseau introuvable : repli impossible'
       diagnostic

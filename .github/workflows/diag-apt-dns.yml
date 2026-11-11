@@ -64,7 +64,8 @@ jobs:
           echo "DNS avant : $avant"
           regles=()
           bloquer() {  # $@ : arguments iptables de sélection
-            for p in udp tcp; do sudo iptables -I OUTPUT -p "$p" --dport 53 "$@" -j DROP && regles+=("$p|$*"); done
+            # -o : seulement le trafic sortant de l'interface (le relais local 127.0.0.53 reste libre)
+            for p in udp tcp; do sudo iptables -I OUTPUT -o "$iface" -p "$p" --dport 53 "$@" -j DROP && regles+=("$p|$*"); done
           }
           case "$scenario" in
             repli) bloquer '!' -d 1.1.1.1 ;;   # le résolveur Azure est « muet », 1.1.1.1 joignable
@@ -78,7 +79,7 @@ jobs:
           for r in "${regles[@]}"; do
             p=${r%%|*}; a=${r#*|}
             # shellcheck disable=SC2086
-            sudo iptables -D OUTPUT -p "$p" --dport 53 $a -j DROP
+            sudo iptables -D OUTPUT -o "$iface" -p "$p" --dport 53 $a -j DROP
           done
           sudo iptables -S OUTPUT | grep -c -e 'dport 53' || true
           apres=$(resolvectl dns "$iface")
