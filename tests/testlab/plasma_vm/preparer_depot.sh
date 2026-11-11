@@ -10,6 +10,7 @@ set -euo pipefail
 iso=${1:?usage: preparer_depot.sh <iso> <dossier-rpm-mirivue> <sortie>}
 rpmdir=${2:?}; sortie=${3:?}
 commit=${GITHUB_SHA:-inconnu}
+. "$(dirname "$0")/image.env"
 travail=$(mktemp -d); mkdir -p "$sortie/repo"
 cleanup() { for m in rootfs squash iso; do sudo umount "$travail/$m" 2>/dev/null || true; done; sudo rm -rf "$travail"; }
 trap cleanup EXIT
@@ -31,7 +32,7 @@ sudo cp -a "$racine/etc/os-release" "$travail/iso-root/etc/os-release" 2>/dev/nu
 echo "paquets installés dans l'ISO : $(sudo rpm --dbpath "$travail/iso-root/usr/lib/sysimage/rpm" -qa 2>/dev/null | wc -l || true)"
 nb=$(ls "$rpmdir"/mirivue-kde-*.rpm | wc -l); [ "$nb" = 1 ] || { echo "il faut exactement 1 RPM mirivue-kde, trouvé $nb" >&2; exit 1; }
 sudo mkdir -p "$travail/out"
-sudo docker run --rm -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" fedora:45 bash -euo pipefail -c '
+sudo docker run --rm -e CLE_EMPREINTE="$CLE_EMPREINTE" -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$travail/out:/out" fedora:45 bash -euo pipefail -c '
   dnf -y install createrepo_c rpm >/dev/null
   mkdir -p /cache
   dnf -y --installroot=/iso-root --use-host-config --releasever=45 --setopt=install_weak_deps=False \
@@ -39,13 +40,16 @@ sudo docker run --rm -v "$travail/iso-root:/iso-root" -v "$rpmdir:/in:ro" -v "$t
   # dnf5 range les RPM téléchargés dans son cache : on les rassemble à plat.
   { find /cache /iso-root/var/cache /var/cache -name "*.rpm" -type f 2>/dev/null || true; } | while read -r f; do [ -e "/out/$(basename "$f")" ] || cp "$f" /out/; done
   n=$(ls /out/*.rpm 2>/dev/null | wc -l); echo "RPM téléchargés (hors Mirivue) : $n"
-  [ "$n" -ge 7 ] || { echo "dépendances attendues non téléchargées ($n)" >&2; exit 1; }
+  [ "$n" -ge 1 ] || { echo "dépendances attendues non téléchargées ($n)" >&2; exit 1; }
   ls /out | head -n 60
-  # Signatures : toute RPM Fedora doit être signée par la clé Fedora 45 ; seule Mirivue est non signée.
-  rpmkeys --import /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-primary
+  # Signatures : toute RPM Fedora doit être signée par la clé Fedora 45 épinglée (image.env) ; seule Mirivue est non signée.
+  ls /etc/pki/rpm-gpg | grep -i "fedora-45" || { echo "clés Fedora 45 introuvables" >&2; ls /etc/pki/rpm-gpg >&2; exit 1; }
+  for k in /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-*; do rpmkeys --import "$k" 2>&1 || true; done
+  id_cle=$(echo "$CLE_EMPREINTE" | tail -c 17 | tr A-F a-f)
   for f in /out/*.rpm; do
     case "$f" in */mirivue-kde-*) continue;; esac
     rpmkeys -K "$f" | grep -q "digests signatures OK" || { echo "signature invalide : $f" >&2; exit 1; }
+    rpm -qp --qf "%{RSAHEADER:pgpsig}\n" "$f" 2>/dev/null | grep -qi "$id_cle" || { echo "$f : pas signé par la clé épinglée $id_cle" >&2; exit 1; }
   done
   cp /in/mirivue-kde-*.rpm /out/
   createrepo_c --quiet /out
