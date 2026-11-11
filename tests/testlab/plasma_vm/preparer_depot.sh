@@ -15,10 +15,10 @@ cleanup() { for m in rootfs squash iso; do sudo umount "$travail/$m" 2>/dev/null
 trap cleanup EXIT
 mkdir -p "$travail"/{iso,squash,rootfs,iso-root}
 sudo mount -o loop,ro "$iso" "$travail/iso"
-squash=$(find "$travail/iso" -iname 'squashfs.img' | head -n1)
+squash=$(sudo find "$travail/iso" -iname 'squashfs.img' | head -n1)
 [ -n "$squash" ] || { echo "squashfs.img introuvable dans l'ISO" >&2; exit 1; }
 sudo mount -t squashfs -o loop,ro "$squash" "$travail/squash"
-rootfs=$(find "$travail/squash" -iname 'rootfs.img' | head -n1)
+rootfs=$(sudo find "$travail/squash" -iname 'rootfs.img' | head -n1)
 if [ -n "$rootfs" ]; then sudo mount -o loop,ro "$rootfs" "$travail/rootfs"; racine=$travail/rootfs
 else racine=$travail/squash; fi          # image sans couche ext4 intermédiaire
 bd=$(sudo find "$racine/usr/lib/sysimage/rpm" "$racine/var/lib/rpm" -maxdepth 0 -type d 2>/dev/null | head -n1)

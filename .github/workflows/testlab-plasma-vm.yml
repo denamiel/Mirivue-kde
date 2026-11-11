@@ -167,11 +167,12 @@ jobs:
       - name: Invité saboté (plasmashell tué) — le pilote DOIT sortir en code 1
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
           . tests/testlab/plasma_vm/image.env
           python3 tests/testlab/plasma_vm/pilote.py --iso ~/iso-cache/"$ISO_NOM" --artefacts artefacts-echec \
             --forcer-echec plasma --delai 900
           code=$?
+          set -e
           echo "code du pilote : $code" | tee -a "$GITHUB_STEP_SUMMARY"
           # Le test réussit seulement si l'échec est détecté, expliqué et documenté.
           [ "$code" = 1 ] || { echo "échec forcé non détecté comme code 1 (reçu $code)" >&2; exit 1; }
