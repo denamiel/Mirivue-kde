@@ -27,8 +27,9 @@ class TestNativeTrashView(unittest.TestCase):
         self.assertIn("operation='restore'", self.app)
         self.assertIn("operation='delete'", self.app)
         self.assertIn('KIO::restoreFromTrash(sources)', self.service)
-        self.assertIn('new KIO::DeleteOrTrashJob(sources, KIO::AskUserActionInterface::Delete,', self.service)
-        self.assertIn('static_cast<KIO::DeleteOrTrashJob *>(job)->start()', self.service)
+        # The actual removal/confirmation paths are exercised by the real-service
+        # C1/H1/H2 tests; the cancellable wrapper still delegates them to KDE.
+        self.assertIn('public KIO::DeleteOrTrashJob', self.service)
         self.assertIn("tr('restore'), tr('delete')", self.platform)
         self.assertIn("'restore': (tr('Restauration')", self.movement)
 

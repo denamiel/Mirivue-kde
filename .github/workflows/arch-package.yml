@@ -38,6 +38,34 @@ jobs:
           cp /home/builder/source/*.pkg.tar.zst dist/
           cd dist
           sha256sum *.pkg.tar.zst > SHA256SUMS
+      - name: Installation, mise à jour depuis bêta 5 et retour arrière jetables
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          validation_dir="$(mktemp -d)"
+          validation_home="$validation_dir/home"
+          validation_config="$validation_dir/config"
+          validation_data="$validation_dir/data"
+          validation_state="$validation_dir/state"
+          validation_cache="$validation_dir/cache"
+          mkdir -p "$validation_home" "$validation_config/pdenams" "$validation_data" "$validation_state" "$validation_cache"
+          printf '[General]\nstable-audit=preserver\n' > "$validation_config/pdenams/Mirivue.conf"
+          printf 'données utilisateur de test\n' > "$validation_home/temoin.txt"
+          sha256sum "$validation_home/temoin.txt" > "$validation_dir/temoin.sha256"
+          pacman --noconfirm -S --needed curl dbus
+          curl --fail --location --retry 2 \
+            https://github.com/denamiel/mirivue-arch/releases/download/repository/mirivue-kde-1.0.0beta5-4-x86_64.pkg.tar.zst \
+            -o "$validation_dir/baseline.pkg.tar.zst"
+          printf '28488dafddabef6176e61717a83ff8d8899aa6c302c9af2f3a6ee785765a4a4b  %s\n' "$validation_dir/baseline.pkg.tar.zst" | sha256sum -c -
+          for package in "$validation_dir/baseline.pkg.tar.zst" dist/*.pkg.tar.zst "$validation_dir/baseline.pkg.tar.zst" dist/*.pkg.tar.zst; do
+            pacman --noconfirm -U "$package"
+            mirivue-kde --version
+            env HOME="$validation_home" XDG_CONFIG_HOME="$validation_config" XDG_DATA_HOME="$validation_data" \
+              XDG_STATE_HOME="$validation_state" XDG_CACHE_HOME="$validation_cache" \
+              dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+            sha256sum -c "$validation_dir/temoin.sha256"
+            grep -q '^stable-audit=preserver$' "$validation_config/pdenams/Mirivue.conf"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: mirivue-kde-arch-x86_64

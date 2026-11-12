@@ -44,6 +44,9 @@ REQUIRED_CHECKS = (
 # once its CI runs are stable (docs/TESTLAB-WAYLAND.md).
 INFORMATIVE_CHECKS = (
     'TestLab Wayland — KWin virtuel (Fedora 45)',
+    'Qualification stable — suite complète (Fedora 45)',
+    'Fichiers réels sur ext4',
+    'Fichiers réels sur ntfs3',
 )
 
 

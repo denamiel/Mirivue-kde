@@ -22,6 +22,18 @@ class TestIndependentTabs(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication(['Mirivue-test'])
 
+    def close_window(self, window):
+        # closeEvent may defer closure until asynchronous workers have stopped.
+        # Do not delete their temporary folders while that closure is pending.
+        from PySide6.QtTest import QTest
+        window.quit_requested = True
+        deadline = time.monotonic() + 10
+        while not window.close() and time.monotonic() < deadline:
+            self.app.processEvents()
+            QTest.qWait(20)
+        self.assertTrue(window.close(), 'window did not finish its asynchronous shutdown')
+        self.app.processEvents()
+
     def test_history_arrow_menu_uses_active_pane(self):
         from mirivue.app import Window
 
@@ -61,8 +73,7 @@ class TestIndependentTabs(unittest.TestCase):
                 window.populate_navigation_history(window.forward_history_menu, 1)
                 self.assertEqual(window.forward_history_menu.actions()[0].toolTip(), str(second))
             finally:
-                window.quit_requested = True
-                window.close()
+                self.close_window(window)
 
     def test_tabs_keep_navigation_split_and_search_state(self):
         from mirivue.app import Window
@@ -109,8 +120,7 @@ class TestIndependentTabs(unittest.TestCase):
                 self.assertEqual(window.tab_bar.count(), 1)
                 self.assertEqual(window.folder, str(left))
             finally:
-                window.quit_requested = True
-                window.close()
+                self.close_window(window)
 
     def test_split_width_is_restored_per_tab_and_after_reopening(self):
         from mirivue.app import Window
@@ -175,8 +185,7 @@ class TestIndependentTabs(unittest.TestCase):
                 active = active_widths(window)
                 self.assertLess(active[0], active[1], 'tab 2 after reopening')
             finally:
-                window.quit_requested = True
-                window.close()
+                self.close_window(window)
 
     def test_places_width_survives_restart_and_hidden_panel(self):
         from mirivue.app import Window
@@ -196,8 +205,7 @@ class TestIndependentTabs(unittest.TestCase):
                 saved = int(settings.value('panes/sidebar-width-v1'))
                 self.assertGreater(saved, 250)
             finally:
-                first.quit_requested = True
-                first.close()
+                self.close_window(first)
             with patch('mirivue.app.mirivue_settings', return_value=settings):
                 second = Window()
             try:
@@ -205,8 +213,7 @@ class TestIndependentTabs(unittest.TestCase):
                 self.app.processEvents()
                 self.assertAlmostEqual(second.main_splitter.sizes()[0], saved, delta=15)
             finally:
-                second.quit_requested = True
-                second.close()
+                self.close_window(second)
 
 
 if __name__ == '__main__':

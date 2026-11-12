@@ -18,7 +18,7 @@ jobs:
     name: RPM KDE Fedora ${{ matrix.fedora }}
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool dbus-daemon python3-pyyaml python3-rpm
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -73,31 +73,14 @@ jobs:
           for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee protection_main; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
-      - name: Compiler les contrôles natifs supplémentaires de la suite complète
-        if: matrix.fedora == '45'
-        run: |
-          cmake -S native -B qualification-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMIRIVUE_NAVIGATOR_TESTS=ON
-          cmake --build qualification-native --parallel 2
-      - name: Qualifier toutes les suites existantes, avec journaux séparés
+      - name: Annuler une confirmation KDE effectivement visible sous X11
         if: matrix.fedora == '45'
         env:
-          MIRIVUE_TEST_PRIVATE_TMPFS: '1'
-          MIRIVUE_TEST_DESKTOP_WORKER: '1'
+          QT_QPA_PLATFORM: xcb
+          MIRIVUE_CONFIRMATION_VISIBLE: '1'
         run: |
-          export MIRIVUE_TEST_PRESENTATION_LIBRARY="$PWD/qualification-native/libmirivue-item-presentation.so"
-          export MIRIVUE_TEST_DOLPHIN_LIBRARY="$PWD/qualification-native/libmirivue-dolphin-view.so"
-          export MIRIVUE_TEST_NAVIGATOR_EXECUTABLE="$PWD/qualification-native/mirivue-navigator-check"
-          export MIRIVUE_TEST_KIO_LIST_EXECUTABLE="$PWD/qualification-native/mirivue-kio-list"
-          export MIRIVUE_TEST_PLACES_LIBRARY="$PWD/qualification-native/libmirivue-kio-places-widget.so"
-          export MIRIVUE_TEST_OPEN_WITH_REFERENCE="$PWD/qualification-native/libmirivue-open-with-reference.so"
-          python3 packaging/qualifier_suites_stable.py
-      - uses: actions/upload-artifact@v4
-        if: always() && matrix.fedora == '45'
-        with:
-          name: qualification-stable-suites
-          path: qualification-artefacts/
-          if-no-files-found: error
-          retention-days: 14
+          export PYTHONPATH="$PWD:$PWD/tests"
+          xvfb-run -a dbus-run-session -- timeout 90 python3 -m unittest discover -s tests -p test_c1_h1_h2_regressions.py -k TestACancellationKeepsService -v
       - name: Signaler une incompatibilité de développement
         if: failure() && matrix.experimental
         run: echo 'Rawhide a échoué. Examiner les dépendances et les tests avant la prochaine migration ; aucun paquet Rawhide n’est publié.' >> "$GITHUB_STEP_SUMMARY"
@@ -107,6 +90,133 @@ jobs:
           name: rpm-kde-fedora-${{ matrix.fedora }}
           path: dist/rpms/x86_64/*.rpm
           if-no-files-found: error
+
+
+  qualification-complete:
+    name: Qualification stable — suite complète (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Nœud de rendu virtuel jetable, comme dans le TestLab Wayland
+        run: |
+          sudo modprobe vgem
+          node=$(ls /dev/dri/renderD* | head -n 1)
+          echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
+          stat -c '%n %a %U:%G' "$node" > "$RUNNER_TEMP/qualification-node-before.txt"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Suite intégrale et vrais scénarios X11/Wayland, trois passes si tout réussit
+        run: |
+          mkdir -p qualification-artefacts
+          docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
+            -v "$PWD:/src:ro" -v "$PWD/qualification-artefacts:/artefacts" fedora:45 bash -euo pipefail -c '
+            dnf -y -q install python3 git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
+              dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd >/dev/null
+            cp -a /src /w && cd /w
+            dnf -y -q builddep packaging/fedora/mirivue-kde.spec >/dev/null
+            dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
+            dnf -y -q --setopt=install_weak_deps=False install plasma-workspace-libs >/dev/null
+            mkdir -p tools
+            cp -a /usr/lib64/mirivue-kde/tools/. tools/
+            cmake -S native -B qualification-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMIRIVUE_NAVIGATOR_TESTS=ON
+            cmake --build qualification-native --parallel 2
+            useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-testlab
+            groupadd --system testlab-rendu
+            usermod -aG testlab-rendu mirivue-testlab
+            chgrp testlab-rendu /dev/dri/renderD128
+            chmod 0660 /dev/dri/renderD128
+            export MIRIVUE_TESTLAB_USER=mirivue-testlab MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1
+            export MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 MIRIVUE_TESTLAB_REQUIRE_WAYLAND=1
+            export MIRIVUE_TEST_PRIVATE_TMPFS=1 MIRIVUE_TEST_DESKTOP_WORKER=1
+            export MIRIVUE_TEST_PRESENTATION_LIBRARY="$PWD/qualification-native/libmirivue-item-presentation.so"
+            export MIRIVUE_TEST_DOLPHIN_LIBRARY="$PWD/qualification-native/libmirivue-dolphin-view.so"
+            export MIRIVUE_TEST_NAVIGATOR_EXECUTABLE="$PWD/qualification-native/mirivue-navigator-check"
+            export MIRIVUE_TEST_KIO_LIST_EXECUTABLE="$PWD/qualification-native/mirivue-kio-list"
+            export MIRIVUE_TEST_PLACES_LIBRARY="$PWD/qualification-native/libmirivue-kio-places-widget.so"
+            export MIRIVUE_TEST_OPEN_WITH_REFERENCE="$PWD/qualification-native/libmirivue-open-with-reference.so"
+            for pass in 1 2 3; do
+              MIRIVUE_QUALIFICATION_OUTPUT="/artefacts/pass-$pass" python3 packaging/qualifier_suites_stable.py
+            done'
+      - name: Permissions de l'hôte inchangées
+        if: always()
+        run: |
+          stat -c '%n %a %U:%G' "$RENDER_NODE" > "$RUNNER_TEMP/qualification-node-after.txt"
+          cmp "$RUNNER_TEMP/qualification-node-before.txt" "$RUNNER_TEMP/qualification-node-after.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qualification-stable-suites
+          path: qualification-artefacts/
+          if-no-files-found: error
+          retention-days: 14
+
+
+  fichiers-images:
+    name: Fichiers réels sur ${{ matrix.filesystem }}
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        filesystem: [ext4, ntfs3]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Formater et monter uniquement une image jetable
+        env:
+          TEST_FS: ${{ matrix.filesystem }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/mirivue-images" "$RUNNER_TEMP/mirivue-montage" fichiers-images-artefacts
+          truncate -s 256M "$RUNNER_TEMP/mirivue-images/test.img"
+          docker run --rm -v "$RUNNER_TEMP/mirivue-images:/images" -e TEST_FS fedora:45 bash -euo pipefail -c '
+            dnf -y -q install e2fsprogs ntfsprogs >/dev/null
+            if [ "$TEST_FS" = ext4 ]; then mkfs.ext4 -F /images/test.img; else mkntfs -F -Q /images/test.img; fi'
+          options=loop
+          if [ "$TEST_FS" = ntfs3 ]; then
+            sudo modprobe ntfs3
+            options=loop,uid=0,gid=0,umask=0077
+          fi
+          sudo mount -t "$TEST_FS" -o "$options" "$RUNNER_TEMP/mirivue-images/test.img" "$RUNNER_TEMP/mirivue-montage"
+          findmnt --target "$RUNNER_TEMP/mirivue-montage" -n -o FSTYPE,TARGET,OPTIONS | tee fichiers-images-artefacts/montage.txt
+          [ "$(findmnt --target "$RUNNER_TEMP/mirivue-montage" -n -o FSTYPE)" = "$TEST_FS" ]
+      - name: Copie, déplacement, conflit annulé, Corbeille et restauration KIO
+        env:
+          TEST_FS: ${{ matrix.filesystem }}
+        run: |
+          docker run --rm --init -v "$PWD:/src:ro" -v "$RUNNER_TEMP/mirivue-montage:/fs:rw" \
+            -e MIRIVUE_FILESYSTEM_TYPE="$TEST_FS" -e MIRIVUE_FILESYSTEM_ROOT=/fs fedora:45 bash -euo pipefail -c '
+            dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
+            export PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=offscreen
+            export PATH=/usr/lib64/mirivue-kde/tools:$PATH
+            dbus-run-session -- timeout 180 python3 /src/packaging/qualifier_fichiers_stable.py
+            ' 2>&1 | tee fichiers-images-artefacts/resultat.log
+      - name: Démonter l'image de test
+        if: always()
+        run: |
+          if mountpoint -q "$RUNNER_TEMP/mirivue-montage"; then sudo umount "$RUNNER_TEMP/mirivue-montage"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fichiers-images-${{ matrix.filesystem }}
+          path: fichiers-images-artefacts/
+          if-no-files-found: error
+          retention-days: 14
 
   testlab:
     name: TestLab — vraie fenêtre sous Xvfb (Fedora 45)

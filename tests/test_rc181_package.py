@@ -15,7 +15,7 @@ class TestReleaseLicenses(unittest.TestCase):
     for name in expected:tar.add(root/name,arcname=root.name+'/'+name)
    with tarfile.open(archive) as tar:
     for name in expected:self.assertEqual(tar.extractfile(root.name+'/'+name).read(),(root/name).read_bytes())
-   source=work/'src';source.mkdir();(source/root.name).symlink_to(root,target_is_directory=True);(source/'build').symlink_to(Path(library).parent,target_is_directory=True)
+   source=work/'src';source.mkdir();(source/'mirivue-source').symlink_to(root,target_is_directory=True);(source/'build').symlink_to(Path(library).parent,target_is_directory=True)
    package=work/'pkg';package.mkdir()
    script='set -e\nsource "$1"\nsrcdir="$2"\npkgdir="$3"\npackage\n'
    result=subprocess.run(['bash','-c',script,'audit-package',str(root/'packaging/PKGBUILD.template'),str(source),str(package)],capture_output=True,text=True,timeout=30)

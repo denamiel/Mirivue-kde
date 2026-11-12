@@ -31,6 +31,18 @@ Il s'agit d'adaptateurs des API publiques, sans copie de leur implémentation.
 
 ## Validation attendue
 
+Première validation acquise au commit `02dde64` :
+[run 43280299908](https://github.com/denamiel/Mirivue-kde/actions/runs/43280299908),
+Fedora 44/45/Rawhide, Python, X11 et Wayland virtuel réussis. Journal Fedora 44
+131399494578 lu : 54 tests C1/H1/H2 réussis sans test sauté. La reproduction
+desktop sur `25e8a039` était rouge, avec dépassement de délai ; elle n'avait
+pas atteint les nouveaux tests d'annulation, donc pas d'avant/après rouge
+revendiqué pour ces derniers. L'absence de doKill est vérifiée dans KDE v6.31.0.
+
+Une vérification supplémentaire attend de voir la fenêtre de confirmation
+X11 du service avant de demander son annulation, puis exige sa disparition.
+Son résultat est distinct de la première validation hors écran ci-dessus.
+
 Les tests de tests/test_c1_h1_h2_regressions.py doivent vérifier :
 - annuler les confirmations corbeille et suppression sans redémarrer le service,
   sans toucher au fichier, puis annuler réellement une opération antérieure ;

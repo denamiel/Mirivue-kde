@@ -4,6 +4,38 @@ Audit du 12 novembre 2026, exclusivement via GitHub, sur main
 `faa828e0929dd91d3fe439a05b25048e7ebbe38b` (1.0.0-beta.6).
 **Décision technique : stable non encore démontrée.** Aucune publication effectuée.
 
+## Suivi de la qualification
+
+- PR #27, commit `02dde64b64e7b019fc8a307f3fd3d7a102f653b7` :
+  [run 43280299908](https://github.com/denamiel/Mirivue-kde/actions/runs/43280299908)
+  réussi sur Fedora 44/45/Rawhide, Python, X11 et KWin virtuel. Les deux incidents
+  KIO ci-dessous sont corrigés sur cette branche ; les 54 tests C1/H1/H2 passent
+  sans test ignoré, worker desktop inclus. Voir `docs/STABILISATION-KIO.md`.
+- Première suite intégrale sur le candidat cumulé `83e5765`,
+  [run 43280350215](https://github.com/denamiel/Mirivue-kde/actions/runs/43280350215) :
+  137 suites parcourues, 777 tests comptés, sept suites en échec ou bloquées,
+  19 tests TestLab ignorés faute de leur profil graphique. Journaux conservés
+  dans l'artefact `qualification-stable-suites`, pas de validation stable annoncée.
+- Écarts constatés : assertions de texte obsolètes (progression, colonne de
+  dossier et construction des jobs Corbeille), préparation du paquet sous un
+  mauvais répertoire, confusion entre fichiers suivis et outils construits,
+  lecture trop tôt du résultat asynchrone des renommages, fermeture de fenêtres
+  de test non attendue avant destruction de leurs dossiers. Les assertions de
+  résultat restent exigées ; une pile est capturée avant tout nouveau délai.
+- Qualification suivante : toutes les suites avec les vrais profils X11 et
+  Wayland ; le test du faux programme conçu pour refuser root est rejoué sous
+  le compte jetable et reste identifié dans le rapport. Tout autre test ignoré,
+  échec ou suite vide reste bloquant. Trois passes ne sont tentées que si la
+  première est entièrement couverte et réussie.
+- Des jobs distincts préparent des images ext4/NTFS3 et un cycle Arch
+  installation/mise à jour depuis le paquet bêta 5 épinglé/retour arrière.
+  Ils ne constituent pas encore une preuve de mise à jour vers une version 1.0
+  ni une validation de mise à jour Fedora.
+
+Les nouveaux noms de jobs sont classés informatifs dans le vérificateur. Les
+six contrôles requis et le ruleset effectif ne sont pas modifiés. Aucun appel
+d'application des protections n'est effectué.
+
 ## Preuves disponibles
 
 - [CI Fedora 43258212980](https://github.com/denamiel/Mirivue-kde/actions/runs/43258212980) :

@@ -3,6 +3,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -58,6 +59,13 @@ class TestPaneRegressions(unittest.TestCase):
     def drain(self):
         for _ in range(5):
             self.app.processEvents()
+
+    def wait_until(self, predicate):
+        deadline = time.monotonic() + 10
+        while not predicate() and time.monotonic() < deadline:
+            self.app.processEvents()
+            QTest.qWait(10)
+        self.assertTrue(predicate(), 'the asynchronous KIO operation did not complete')
 
     def view(self, pane):
         return pane.content_stack.currentWidget()
@@ -147,6 +155,7 @@ class TestPaneRegressions(unittest.TestCase):
                     with patch.object(w, 'start_thumbnails',
                             side_effect=lambda force_paths=(): calls.append((w.bound_pane, force_paths))):
                         self.click_other_pane(other)
+                        self.wait_until(lambda: target.exists() and not w.pending_transfers())
                     self.assertFalse(old.exists())
                     self.assertEqual(target.read_text(), origin.column_slot)
                     self.assertEqual(origin.model.rows[0].path, target)
@@ -167,6 +176,7 @@ class TestPaneRegressions(unittest.TestCase):
         scanned = []
         with patch.object(w, 'scan', side_effect=lambda: scanned.append(w.bound_pane)):
             self.click_other_pane(other)
+            self.wait_until(lambda: scanned == [origin] and not w.pending_transfers())
         self.assertTrue(old.with_name('new.folder').is_dir())
         self.assertFalse(old.exists())
         self.assertEqual(scanned, [origin])

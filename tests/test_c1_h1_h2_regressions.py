@@ -742,13 +742,40 @@ class TestACancellationKeepsService(IsolatedKioTestCase):
         self.assertTrue(services._kio_undo_available)
         victim = write(self.directory / 'victim.txt', 'KEEP')
         started = time.monotonic()
+        require_visible = os.environ.get('MIRIVUE_CONFIRMATION_VISIBLE') == '1'
+        cancel_time = None
+        visible_seen = False
+        def dialog_visible():
+            import subprocess
+            result = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(process.pid)],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=2)
+            return result.returncode == 0 and bool(result.stdout.strip())
+        def cancel_when_ready():
+            nonlocal cancel_time, visible_seen
+            if cancel_time is not None:
+                return True
+            if time.monotonic() - started < 0.8:
+                return False
+            if require_visible:
+                visible_seen = dialog_visible()
+                if not visible_seen:
+                    return False
+            cancel_time = time.monotonic()
+            return True
         ok, error = services._kio_service_request(command, sources=[victim.as_uri()],
-            cancelled=lambda: time.monotonic() - started >= 0.8, timeout=10)
+            cancelled=cancel_when_ready, timeout=15)
+        if require_visible:
+            self.assertTrue(visible_seen, 'the real confirmation window was never observed')
+            deadline = time.monotonic() + 1
+            while dialog_visible() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertFalse(dialog_visible(), 'the cancelled confirmation must close')
         self.assertFalse(ok)
         self.assertEqual(error, 'Transfert annulé.')
         self.assertIs(services._kio_process, process, 'cancelling must not restart the service')
         self.assertIsNone(process.poll())
-        self.assertLess(time.monotonic() - started, 4)
+        self.assertIsNotNone(cancel_time)
+        self.assertLess(time.monotonic() - cancel_time, 4)
         self.assertEqual(victim.read_text(), 'KEEP')
         self.assertEqual(self.trashed(), [])
         self.assertTrue(services._kio_undo_available)
