@@ -49,3 +49,64 @@ jobs:
           claude_args: |
             --max-turns 5
             --allowedTools "Read,Glob,Grep"
+
+      - name: Classer l'erreur Claude sans publier la sortie brute
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          # Lecture sur le runner GitHub uniquement. Aucune sortie libre,
+          # aucun artefact brut, aucun affichage d'exception ou de secret.
+          path = Path(os.environ["RUNNER_TEMP"]) / "claude-execution-output.json"
+          try:
+              if path.stat().st_size > 8_000_000:
+                  print("Diagnostic Claude : fichier trop volumineux")
+                  raise SystemExit(0)
+              messages = json.loads(path.read_text(encoding="utf-8"))
+          except (OSError, ValueError):
+              print("Diagnostic Claude : sortie absente ou illisible")
+              raise SystemExit(0)
+          if not isinstance(messages, list):
+              print("Diagnostic Claude : format inattendu")
+              raise SystemExit(0)
+
+          texts = []
+          for message in messages:
+              if not isinstance(message, dict):
+                  continue
+              if message.get("type") == "result":
+                  for key in ("result", "errors"):
+                      value = message.get(key)
+                      if isinstance(value, str):
+                          texts.append(value)
+                      elif isinstance(value, list):
+                          texts.extend(x for x in value if isinstance(x, str))
+              elif message.get("type") == "assistant" and message.get("error"):
+                  texts.append(str(message["error"]))
+                  body = message.get("message", {})
+                  if isinstance(body, dict):
+                      content = body.get("content", [])
+                      if isinstance(content, list):
+                          texts.extend(x["text"] for x in content
+                                       if isinstance(x, dict) and isinstance(x.get("text"), str))
+          error = "\n".join(texts).lower()
+          rules = (
+              ("authentification", ("authentication", "unauthorized", "invalid api key",
+                                   "oauth token", "token expired", "not logged in", "401")),
+              ("quota ou limitation", ("rate_limit", "rate limit", "usage limit", "quota", "429")),
+              ("facturation", ("billing", "credit balance", "payment required")),
+              ("modele indisponible", ("model not found", "invalid model", "model_not_found")),
+              ("service ou reseau", ("overloaded", "connection error", "timeout", "503", "529")),
+              ("acces refuse", ("permission denied", "forbidden", "403")),
+          )
+          found = [label for label, patterns in rules if any(p in error for p in patterns)]
+          print("Diagnostic Claude : indices textuels, sans preuve definitive")
+          for label in found:
+              print("Categorie possible : " + label)
+          if not found:
+              print("Categorie : indeterminee")
+          PY
