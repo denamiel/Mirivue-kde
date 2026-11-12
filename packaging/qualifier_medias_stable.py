@@ -43,7 +43,7 @@ try:
     from PySide6.QtWidgets import QApplication
     from unittest.mock import patch
     from mirivue.app import Window, prepare_audio_stream_identity
-    from mirivue.metadata import basic_entry
+    from mirivue.background_listing import listed_media_entry
     prepare_audio_stream_identity()
     app = QApplication(['Mirivue KDE'])
     settings = QSettings(str(root / 'settings.ini'), QSettings.IniFormat)
@@ -76,7 +76,7 @@ try:
     window.preview_dock.show()
     for preview in (image_path, pdf_path):
         window.media_image.clear_preview()
-        row = basic_entry(preview)
+        row = listed_media_entry(preview)
         window._preview_playlist = [row]
         window._preview_index = 0
         window._preview_pending = row
@@ -97,7 +97,7 @@ try:
 
     results = []
     for media in (audio, video):
-        window._preview_playlist = [basic_entry(media)]
+        window._preview_playlist = [listed_media_entry(media)]
         window.play_media_at(0)
         player = window.media_player
         assert player is not None
@@ -123,7 +123,7 @@ try:
     rounds = 0
     while time.monotonic() - started < 600:
         assert all(p.poll() is None for p in processes), 'audio daemon exited'
-        window._preview_playlist = [basic_entry(audio)]
+        window._preview_playlist = [listed_media_entry(audio)]
         window.play_media_at(0)
         wait_for(lambda: window.media_player.position() > 200, 'session playback failed')
         window.stop_media_playback()
