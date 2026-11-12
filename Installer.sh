@@ -56,6 +56,11 @@ check_dependencies() {
     add_missing 'Version compatible de PySide6 (6.8 ou version 6 ultérieure)' pyside6 python3-pyside6
   python_imports 'from PySide6 import QtMultimedia, QtMultimediaWidgets' || \
     add_missing 'Lecture audio et vidéo QtMultimedia' qt6-multimedia qt6-qtmultimedia
+  command -v gst-inspect-1.0 >/dev/null 2>&1 && \
+    gst-inspect-1.0 autoaudiosink >/dev/null 2>&1 && \
+    gst-inspect-1.0 pulsesink >/dev/null 2>&1 && \
+    gst-inspect-1.0 wavparse >/dev/null 2>&1 || \
+    add_missing 'Sortie audio et décodeurs GStreamer' gst-plugins-good gstreamer1-plugins-good
   python_imports 'from PySide6 import QtPdf' || \
     add_missing 'Aperçu PDF QtPdf' qt6-webengine qt6-qtpdf
   python_imports 'import shiboken6' || \
