@@ -81,7 +81,7 @@ jobs:
         run: |
           export PYTHONPATH="$PWD:$PWD/tests"
           xvfb-run -a dbus-run-session -- timeout 90 python3 -m unittest discover -s tests -p test_c1_h1_h2_regressions.py -k TestACancellationKeepsService -v
-      - name: Mise à jour et retour arrière depuis le RPM bêta 5 publié
+      - name: Mise à jour et retour arrière depuis le RPM bêta 6 publié
         if: matrix.fedora == '45'
         env:
           QT_QPA_PLATFORM: offscreen
@@ -96,16 +96,16 @@ jobs:
           sha256sum "$HOME/temoin.txt" > "$validation_dir/temoin.sha256"
           python3 - "$validation_dir/baseline.rpm" <<'PYTHON'
           import hashlib, pathlib, sys, urllib.request
-          url = 'https://download.copr.fedorainfracloud.org/results/pdenams/Mirivue-kde/fedora-45-x86_64/Packages/m/mirivue-kde-1.0.0-0.200.beta5.3.fc45.x86_64.rpm'
+          url = 'https://download.copr.fedorainfracloud.org/results/pdenams/Mirivue-kde/fedora-45-x86_64/Packages/m/mirivue-kde-1.0.0-0.201.beta6.1.fc45.x86_64.rpm'
           data = urllib.request.urlopen(url, timeout=60).read()
-          assert hashlib.sha256(data).hexdigest() == 'c642fdb6311f9b46e0360c60a6e873aefacd076e55ec562f6b7b362057c375cb'
+          assert hashlib.sha256(data).hexdigest() == 'e0bd6710ed3f28fb74210bc98f6e3c12f06c8b388d8f6b24edb3149a65ace4be'
           pathlib.Path(sys.argv[1]).write_bytes(data)
           PYTHON
           candidate=$(find "$PWD/dist/rpms/x86_64" -name 'mirivue-kde-[0-9]*.rpm' -print)
           test -f "$candidate"
           for phase in baseline candidate rollback reinstall; do
             case "$phase" in
-              baseline|rollback) dnf -y downgrade "$validation_dir/baseline.rpm"; expected=0.200.beta5.3.fc45 ;;
+              baseline|rollback) dnf -y downgrade "$validation_dir/baseline.rpm"; expected=0.201.beta6.1.fc45 ;;
               candidate|reinstall) dnf -y upgrade "$candidate"; expected=$(rpm -qp --qf '%{RELEASE}' "$candidate") ;;
             esac
             test "$(rpm -q --qf '%{RELEASE}' mirivue-kde)" = "$expected"
@@ -247,6 +247,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" plasma-artefacts 2>/dev/null || true
           stat -c '%n %a %U:%G' /dev/kvm > "$RUNNER_TEMP/plasma-kvm-after.txt"
           cmp "$RUNNER_TEMP/plasma-kvm-before.txt" "$RUNNER_TEMP/plasma-kvm-after.txt"
+          cp "$RUNNER_TEMP/plasma-kvm-before.txt" "$RUNNER_TEMP/plasma-kvm-after.txt" plasma-artefacts/
           if pgrep -af '(^|/)qemu-system-x86_64( |$)'; then exit 1; fi
           if compgen -G "$RUNNER_TEMP/plasma-vm-*" >/dev/null; then exit 1; fi
           git diff --exit-code

@@ -1,7 +1,8 @@
 # Critères de publication de Mirivue KDE 1.0
 
-Version auditée : **1.0.0-beta.6**, main `faa828e0929dd91d3fe439a05b25048e7ebbe38b`.
-Bilan daté et preuves : [audit stable](docs/AUDIT-STABLE.md).
+Base auditée : **1.0.0-beta.6**, main `faa828e0929dd91d3fe439a05b25048e7ebbe38b`.
+Candidat préparé : **1.0.0**, sans publication.
+Bilan daté et preuves : [audit stable](docs/AUDIT-STABLE.md) et [qualification 1.0](docs/VALIDATION-1.0.md).
 
 Les fonctions sont gelées. Avant la version stable, seuls les défauts reproduits,
 les corrections de tests obsolètes et la documentation de sortie sont traités.
@@ -34,7 +35,8 @@ Les exigences antérieures restent ouvertes tant qu'une preuve ne les satisfait 
 - Versions de l'application, Python, AppStream, RPM et Arch cohérentes ; notices
   livrées complètes ; preuves rattachées au commit candidat exact.
 
-La CI actuelle est partielle et ne satisfait pas à elle seule ces conditions.
+Une suite ciblée ne suffit pas à satisfaire ces conditions. La campagne fonctionnelle
+complète est acquise ; le paquet portant la version 1.0 doit réussir les mêmes contrôles.
 Les essais Plasma historiques ne sont ni annulés ni présentés comme de nouveaux
 résultats sur le candidat. Toute réduction d'une exigence est une décision de
 portée du mainteneur, jamais une conséquence d'un test rouge.
