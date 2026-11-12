@@ -114,6 +114,107 @@ def http_sources(text, prefix):
     return list(dict.fromkeys(lines))
 
 
+# Codes fermes : le champ assistant.error est documente par Anthropic.
+ASSISTANT_ERRORS = (
+    "authentication_failed", "oauth_org_not_allowed", "account_on_hold",
+    "billing_error", "rate_limit", "overloaded", "invalid_request",
+    "model_not_found", "server_error", "max_output_tokens",
+    "cloud_credential_error", "unknown",
+)
+PRIMARY_RULES = {
+    "connexion": ("unable to connect", "connectionerror", "connection_error",
+                 "api_connection_error", "connection reset", "socket hang up",
+                 "econnreset", "econnrefused", "fetch failed", "failed to fetch"),
+    "dns": ("enotfound", "eai_again", "getaddrinfo"),
+    "delai": ("etimedout", "timed out", "timeout"),
+    "certificat": ("certificate verify failed", "unable to verify",
+                  "self signed certificate", "self-signed certificate",
+                  "cert_has_expired", "unable_to_get_issuer_cert_locally",
+                  "unable_to_verify_leaf_signature", "depth_zero_self_signed_cert"),
+    "proxy": ("proxy authentication required", "proxy_error", "proxy connection"),
+    "authentification": ("invalid bearer token", "invalid authentication",
+                         "authentication_failed", "authentication_error",
+                         "unauthorized", "not logged in", "token expired"),
+    "organisation": ("oauth_org_not_allowed", "account_on_hold"),
+    "limitation": ("rate_limit", "rate limit", "session limit", "weekly limit"),
+    "facturation": ("billing_error", "credit balance", "payment required"),
+    "modele": ("model_not_found", "model not found", "invalid model"),
+}
+
+
+def primary_report(messages):
+    """Indices de l'erreur SDK, independants du journal et de ses HTTP annexes."""
+    lines = []
+    texts = []
+    for message in messages:
+        kind = message.get("type")
+        if kind == "result" and message.get("is_error") is True:
+            for field in ("result", "errors", "api_error"):
+                value = message.get(field)
+                if isinstance(value, str):
+                    texts.append(value)
+                elif isinstance(value, list):
+                    texts.extend(v for v in value if isinstance(v, str))
+            value = message.get("api_error")
+            if isinstance(value, str) and value in tuple(PRIMARY_RULES) + (
+                "connection_error", "api_connection_error", "network_error",
+            ) + ASSISTANT_ERRORS:
+                lines.append("Principal SDK api_error ferme : " + value)
+        elif kind == "assistant":
+            value = message.get("error")
+            lines.append("Principal SDK assistant.error forme : " +
+                         shape(value, "error" in message))
+            if isinstance(value, str) and value in ASSISTANT_ERRORS:
+                lines.append("Principal SDK assistant.error ferme : " + value)
+            # Ne lire le contenu que si le SDK signale un message d'erreur.
+            if not isinstance(value, str) or not value:
+                continue
+            texts.append(value)
+            body = message.get("message")
+            if isinstance(body, dict) and isinstance(body.get("content"), list):
+                for block in body["content"]:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text")
+                        if isinstance(text, str):
+                            texts.append(text)
+    lowered = "\n".join(texts).lower()
+    labels = [label for label, patterns in PRIMARY_RULES.items()
+              if any(pattern in lowered for pattern in patterns)]
+    for label in labels:
+        lines.append("Principal SDK indice : " + label)
+    if not labels:
+        lines.append("Principal SDK indice : aucun_reconnu")
+    for status in sorted({int(m) for m in HTTP_PATTERN.findall(lowered)}):
+        lines.append("Principal SDK HTTP textuel : " + str(status))
+    lines.append("Principal SDK : aucun code du journal utilise pour attribuer la cause")
+    return list(dict.fromkeys(lines))
+
+
+def auxiliary_report(text):
+    """Compter les 401 par marqueur SUR LA MEME LIGNE, sans attribution causale."""
+    counts = {"telemetrie": 0, "oauth": 0, "modele": 0, "ambigu": 0, "sans_marqueur": 0}
+    occurrences = 0
+    for record in text.splitlines():
+        if "401" not in HTTP_PATTERN.findall(record):
+            continue
+        occurrences += 1
+        if occurrences > 20:
+            break
+        lower = record.lower()
+        found = set()
+        if any(p in lower for p in ("telemetry", "telemetrie", "statsig", "sentry")):
+            found.add("telemetrie")
+        if "oauth" in lower:
+            found.add("oauth")
+        if any(p in lower for p in ("api:request", "api:response", "api:error", "/v1/messages")):
+            found.add("modele")
+        key = next(iter(found)) if len(found) == 1 else "ambigu" if found else "sans_marqueur"
+        counts[key] += 1
+    return ["Journal 401 lignes marqueur_direct " + key + " : " + str(count)
+            for key, count in counts.items()] + [
+                "Journal 401 : marqueurs textuels seulement, pas preuve de cause principale"]
+
+
 def bounded_text(path):
     if path.is_symlink():
         return None, "lien_refuse"
@@ -170,6 +271,7 @@ def report(execution, debug):
                      str(min(sum(m.get("type") == kind for m in messages), 9999)))
     unknown = sum(m.get("type") not in EVENTS for m in messages)
     lines.append("SDK evenements autres : " + str(min(unknown, 9999)))
+    lines.extend(primary_report(messages))
     texts = []
     for index, message in enumerate(m for m in messages if m.get("type") == "result"):
         if index >= 8:
@@ -203,6 +305,7 @@ def report(execution, debug):
     text, state = bounded_text(debug)
     lines.append("Journal prive : " + state)
     if text is not None:
+        lines.extend(auxiliary_report(text))
         labels = categories(text)
         for label in labels:
             lines.append("Journal indice : " + label)

@@ -146,5 +146,73 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn("401 : occurrences_tronquees", output)
 
 
+
+    def test_primary_connection_is_independent_of_telemetry_401(self):
+        output = self.run_report([
+            {"type": "assistant", "error": "unknown", "message": {"content": [
+                {"type": "text", "text": "Unable to connect " + SENTINEL}]}},
+            {"type": "result", "is_error": True, "result": "Connection error",
+             "api_error": "connection_error"},
+        ], "telemetry export failed HTTP 401")
+        self.assertIn("Principal SDK indice : connexion", output)
+        self.assertIn("Principal SDK api_error ferme : connection_error", output)
+        self.assertIn("marqueur_direct telemetrie : 1", output)
+        self.assertNotIn("Principal SDK HTTP textuel : 401", output)
+        self.assertNotIn(SENTINEL, output)
+
+    def test_typed_assistant_auth_code_is_closed(self):
+        for code in diag.ASSISTANT_ERRORS:
+            output = self.run_report([{"type": "assistant", "error": code}])
+            self.assertIn("assistant.error ferme : " + code, output)
+        output = self.run_report([{"type": "assistant", "error": SENTINEL}])
+        self.assertNotIn(SENTINEL, output)
+        self.assertNotIn("assistant.error ferme :", output)
+
+    def test_non_error_assistant_is_not_primary_evidence(self):
+        output = self.run_report([{"type": "assistant", "message": {"content": [
+            {"type": "text", "text": "Unable to connect HTTP 401 " + SENTINEL}]}}])
+        self.assertNotIn("Principal SDK indice : connexion", output)
+        self.assertNotIn("Principal SDK HTTP textuel : 401", output)
+
+    def test_primary_result_requires_error_flag(self):
+        output = self.run_report([{"type": "result", "is_error": False,
+                                  "result": "HTTP 401 connection error"}])
+        self.assertNotIn("Principal SDK HTTP textuel : 401", output)
+        self.assertNotIn("Principal SDK indice : connexion", output)
+
+    def test_primary_and_auxiliary_may_both_fail(self):
+        output = self.run_report([
+            {"type": "result", "is_error": True,
+             "result": "HTTP 401 Unauthorized", "api_error": "authentication_failed"},
+        ], "telemetry HTTP 401\noauth HTTP 401\napi:error HTTP 401")
+        self.assertIn("Principal SDK HTTP textuel : 401", output)
+        self.assertIn("Principal SDK indice : authentification", output)
+        for key in ("telemetrie", "oauth", "modele"):
+            self.assertIn("marqueur_direct " + key + " : 1", output)
+
+    def test_auxiliary_same_line_only_and_ambiguous(self):
+        output = self.run_report([], "telemetry request\nHTTP 401\ntelemetry oauth HTTP 401")
+        self.assertIn("marqueur_direct telemetrie : 0", output)
+        self.assertIn("marqueur_direct sans_marqueur : 1", output)
+        self.assertIn("marqueur_direct ambigu : 1", output)
+
+    def test_detailed_network_codes_without_raw_text(self):
+        for text, expected in (
+            ("getaddrinfo EAI_AGAIN " + SENTINEL, "dns"),
+            ("CERT_HAS_EXPIRED " + SENTINEL, "certificat"),
+            ("proxy authentication required " + SENTINEL, "proxy"),
+            ("ETIMEDOUT " + SENTINEL, "delai"),
+        ):
+            output = self.run_report([{"type": "result", "is_error": True, "result": text}])
+            self.assertIn("Principal SDK indice : " + expected, output)
+            self.assertNotIn(SENTINEL, output)
+
+    def test_bad_assistant_content_never_escapes(self):
+        for body in (None, [], {"content": SENTINEL}, {"content": [None, {"text": SENTINEL}]}):
+            output = self.run_report([{"type": "assistant", "error": "unknown",
+                                      "message": body}])
+            self.assertNotIn(SENTINEL, output)
+
+
 if __name__ == "__main__":
     unittest.main()
