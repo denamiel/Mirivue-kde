@@ -48,6 +48,7 @@ INFORMATIVE_CHECKS = (
     'Fichiers réels sur ext4',
     'Fichiers réels sur ntfs3',
     'Médias PipeWire et session de dix minutes (Fedora 45)',
+    'Plasma Wayland complet — RPM installé (Fedora 45)',
 )
 
 

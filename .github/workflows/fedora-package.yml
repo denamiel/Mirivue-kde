@@ -154,7 +154,7 @@ jobs:
           docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
             -v "$PWD:/src:ro" -v "$PWD/qualification-artefacts:/artefacts" fedora:45 bash -euo pipefail -c '
             dnf -y -q install python3 python3-pyyaml python3-rpm git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
-              dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd >/dev/null
+              dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd netpbm-progs >/dev/null
             cp -a /src /w && cd /w
             dnf -y -q builddep packaging/fedora/mirivue-kde.spec >/dev/null
             dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
@@ -193,6 +193,75 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+
+  plasma-vm:
+    name: Plasma Wayland complet — RPM installé (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: État KVM initial, sans changement de permissions
+        run: |
+          sudo udevadm settle --timeout=30
+          stat -c '%n %a %U:%G' /dev/kvm > "$RUNNER_TEMP/plasma-kvm-before.txt"
+          git status --porcelain > "$RUNNER_TEMP/plasma-git-before.txt"
+      - uses: actions/cache@v4
+        with:
+          path: ~/iso-cache
+          key: iso-${{ hashFiles('tests/testlab/plasma_vm/image.env') }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: rpm-commit
+      - name: Image Fedora KDE épinglée et vérifiée
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Dépendances signées et RPM candidat pour l'invité sans réseau
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/preparer_depot.sh ~/iso-cache/"$ISO_NOM" "$PWD/rpm-commit" "$PWD/depot" 2>&1 | tee depot.log
+      - name: Prototype existant, session Plasma réelle et création par clavier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plasma-artefacts
+          tests/testlab/plasma_vm/conteneur.sh tests/testlab/plasma_vm/sonde_kvm.sh plasma-artefacts/sonde-kvm.json
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/conteneur.sh python3 tests/testlab/plasma_vm/pilote.py \
+            --iso ~/iso-cache/"$ISO_NOM" --artefacts plasma-artefacts \
+            --paquets "$PWD/depot/repo" --attendu "$PWD/depot/attendu.json" --delai 1500 --saisie
+      - name: Nettoyage et permissions KVM identiques
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" plasma-artefacts 2>/dev/null || true
+          stat -c '%n %a %U:%G' /dev/kvm > "$RUNNER_TEMP/plasma-kvm-after.txt"
+          cmp "$RUNNER_TEMP/plasma-kvm-before.txt" "$RUNNER_TEMP/plasma-kvm-after.txt"
+          if pgrep -af '(^|/)qemu-system-x86_64( |$)'; then exit 1; fi
+          if compgen -G "$RUNNER_TEMP/plasma-vm-*" >/dev/null; then exit 1; fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          cat plasma-artefacts/resume.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plasma-wayland-complet
+          path: |
+            plasma-artefacts/
+            depot.log
+            depot/attendu.json
+          if-no-files-found: error
+          retention-days: 14
 
   medias-session:
     name: Médias PipeWire et session de dix minutes (Fedora 45)
