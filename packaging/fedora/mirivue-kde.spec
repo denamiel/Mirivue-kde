@@ -22,6 +22,9 @@ Requires: python3-pyside6 >= 6.8
 Requires: python3-pyside6 < 7
 Requires: python3-shiboken6, python3-pillow, python3-mutagen
 Requires: qt6-qtmultimedia, qt6-qtpdf
+# The launcher selects GStreamer when Qt ships its backend plugin.
+# autoaudiosink/pulsesink and the basic audio/video decoders are required.
+Requires: gstreamer1-plugins-good
 Requires: /usr/bin/ffmpeg, /usr/bin/ffprobe
 Requires: mediainfo, ark, 7zip, unar, perl-Image-ExifTool
 Requires: /usr/bin/mkvpropedit, /usr/bin/mkvextract

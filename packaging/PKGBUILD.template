@@ -7,7 +7,7 @@ url='https://github.com/denamiel/Mirivue-kde'
 license=('GPL-3.0-or-later' 'MIT' 'GPL-2.0-or-later' 'BSD-2-Clause' 'CC0-1.0')
 depends=(
   'python>=3.11' 'pyside6>=6.8' 'pyside6<7' 'qt6-base' 'qt6-multimedia' 'qt6-webengine'
-  'python-pillow' 'python-mutagen' 'shiboken6' 'ffmpeg' 'mediainfo'
+  'gst-plugins-good' 'python-pillow' 'python-mutagen' 'shiboken6' 'ffmpeg' 'mediainfo'
   'kdialog' 'appstream' 'ark' '7zip' 'unrar' 'perl-image-exiftool' 'mkvtoolnix-cli' 'kio' 'kservice' 'kiconthemes' 'kxmlgui' 'kconfigwidgets' 'kcolorscheme' 'knewstuff' 'kcoreaddons' 'kwindowsystem' 'kparts' 'kguiaddons' 'kwidgetsaddons' 'ktextwidgets' 'ki18n'
 )
 makedepends=('cmake' 'ninja' 'extra-cmake-modules')
