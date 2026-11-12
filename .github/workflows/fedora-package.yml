@@ -18,7 +18,7 @@ jobs:
     name: RPM KDE Fedora ${{ matrix.fedora }}
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -80,6 +80,31 @@ jobs:
           for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee protection_main; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
+      - name: Compiler les contrôles natifs supplémentaires de la suite complète
+        if: matrix.fedora == '45'
+        run: |
+          cmake -S native -B qualification-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMIRIVUE_NAVIGATOR_TESTS=ON
+          cmake --build qualification-native --parallel 2
+      - name: Qualifier toutes les suites existantes, avec journaux séparés
+        if: matrix.fedora == '45'
+        env:
+          MIRIVUE_TEST_PRIVATE_TMPFS: '1'
+          MIRIVUE_TEST_DESKTOP_WORKER: '1'
+        run: |
+          export MIRIVUE_TEST_PRESENTATION_LIBRARY="$PWD/qualification-native/libmirivue-item-presentation.so"
+          export MIRIVUE_TEST_DOLPHIN_LIBRARY="$PWD/qualification-native/libmirivue-dolphin-view.so"
+          export MIRIVUE_TEST_NAVIGATOR_EXECUTABLE="$PWD/qualification-native/mirivue-navigator-check"
+          export MIRIVUE_TEST_KIO_LIST_EXECUTABLE="$PWD/qualification-native/mirivue-kio-list"
+          export MIRIVUE_TEST_PLACES_LIBRARY="$PWD/qualification-native/libmirivue-kio-places-widget.so"
+          export MIRIVUE_TEST_OPEN_WITH_REFERENCE="$PWD/qualification-native/libmirivue-open-with-reference.so"
+          python3 packaging/qualifier_suites_stable.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.fedora == '45'
+        with:
+          name: qualification-stable-suites
+          path: qualification-artefacts/
+          if-no-files-found: error
+          retention-days: 14
       - name: Signaler une incompatibilité de développement
         if: failure() && matrix.experimental
         run: echo 'Rawhide a échoué. Examiner les dépendances et les tests avant la prochaine migration ; aucun paquet Rawhide n’est publié.' >> "$GITHUB_STEP_SUMMARY"
