@@ -45,9 +45,11 @@ jobs:
       - name: Installer uniquement le worker desktop depuis le RPM Fedora vérifié
         run: |
           worker_dir="$(mktemp -d)"
-          dnf -y download --destdir "$worker_dir" plasma-workspace
+          worker_package="$(dnf -q repoquery --whatprovides /usr/lib64/qt6/plugins/kf6/kio/desktop.so --queryformat '%{name}\n' | sort -u)"
+          [[ "$worker_package" =~ ^[a-z0-9][a-z0-9+_.-]*$ ]] || { echo 'Paquet du worker desktop ambigu ou absent' >&2; exit 1; }
+          dnf -y download --destdir "$worker_dir" "$worker_package"
           rpmkeys --checksig "$worker_dir"/*.rpm
-          (cd "$worker_dir" && rpm2cpio ./*.rpm | cpio -idm --quiet './usr/lib64/qt6/plugins/kf6/kio/desktop.so')
+          (cd "$worker_dir" && rpm2cpio ./*.rpm | cpio -idm --quiet --no-absolute-filenames)
           install -Dm755 "$worker_dir/usr/lib64/qt6/plugins/kf6/kio/desktop.so" /usr/lib64/qt6/plugins/kf6/kio/desktop.so
           if ldd /usr/lib64/qt6/plugins/kf6/kio/desktop.so | grep -q 'not found'; then
             echo 'Dépendance du worker desktop manquante' >&2
