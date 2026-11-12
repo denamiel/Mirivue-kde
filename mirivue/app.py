@@ -5180,6 +5180,8 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             def before_refresh():
                 if not getattr(pane, '_closed', False):
                     self.run_in_pane_silent(pane, lambda: self.update_renamed_rows({path: target}, reset=False))
+                    if row.is_dir:
+                        QTimer.singleShot(0, lambda: self.run_in_pane(pane, self.scan))
             return self.start_kio_transfer([QUrl.fromLocalFile(str(path)).toString()],
                 QUrl.fromLocalFile(str(target)).toString(), move=True, operation='moveas',
                 before_refresh=before_refresh) is not None

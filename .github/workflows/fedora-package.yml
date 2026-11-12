@@ -32,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool dbus-daemon python3-pyyaml python3-rpm
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -42,6 +42,10 @@ jobs:
           dnf -y builddep packaging/fedora/mirivue-kde.spec
           bash packaging/fedora/Preparer-Sources.sh
           rpmbuild -ba --define "_sourcedir $PWD/packaging/fedora" --define "_rpmdir $PWD/dist/rpms" --define "_srcrpmdir $PWD/dist/srpms" --define "_smp_build_ncpus 2" packaging/fedora/mirivue-kde.spec
+      - name: Installer le paquet minimal qui fournit le worker desktop
+        run: |
+          dnf -y --setopt=install_weak_deps=False install plasma-workspace-libs
+          test -f /usr/lib64/qt6/plugins/kf6/kio/desktop.so
       - name: Installer et vérifier les guides et le lancement
         env:
           QT_QPA_PLATFORM: offscreen
@@ -59,14 +63,57 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           MIRIVUE_TEST_PRIVATE_TMPFS: "1"
+          MIRIVUE_TEST_DESKTOP_WORKER: "1"
         run: |
           mkdir -p tools
           cp -a /usr/lib64/mirivue-kde/tools/. tools/
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee protection_main; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions ci_validation_guards delete_action_state publication_controlee protection_main; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
+          done
+      - name: Annuler une confirmation KDE effectivement visible sous X11
+        if: matrix.fedora == '45'
+        env:
+          QT_QPA_PLATFORM: xcb
+          MIRIVUE_CONFIRMATION_VISIBLE: '1'
+        run: |
+          export PYTHONPATH="$PWD:$PWD/tests"
+          xvfb-run -a dbus-run-session -- timeout 90 python3 -m unittest discover -s tests -p test_c1_h1_h2_regressions.py -k TestACancellationKeepsService -v
+      - name: Mise à jour et retour arrière depuis le RPM bêta 6 publié
+        if: matrix.fedora == '45'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          validation_dir=$(mktemp -d /tmp/mirivue-rpm-cycle-XXXXXX)
+          export HOME="$validation_dir/home" XDG_CONFIG_HOME="$validation_dir/config"
+          export XDG_DATA_HOME="$validation_dir/data" XDG_STATE_HOME="$validation_dir/state" XDG_CACHE_HOME="$validation_dir/cache"
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME/pdenams" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
+          printf '[General]\nstable-audit=preserver\n' > "$XDG_CONFIG_HOME/pdenams/Mirivue.conf"
+          printf 'données utilisateur de test\n' > "$HOME/temoin.txt"
+          sha256sum "$HOME/temoin.txt" > "$validation_dir/temoin.sha256"
+          python3 - "$validation_dir/baseline.rpm" <<'PYTHON'
+          import hashlib, pathlib, sys, urllib.request
+          url = 'https://download.copr.fedorainfracloud.org/results/pdenams/Mirivue-kde/fedora-45-x86_64/Packages/m/mirivue-kde-1.0.0-0.201.beta6.1.fc45.x86_64.rpm'
+          data = urllib.request.urlopen(url, timeout=60).read()
+          assert hashlib.sha256(data).hexdigest() == 'e0bd6710ed3f28fb74210bc98f6e3c12f06c8b388d8f6b24edb3149a65ace4be'
+          pathlib.Path(sys.argv[1]).write_bytes(data)
+          PYTHON
+          candidate=$(find "$PWD/dist/rpms/x86_64" -name 'mirivue-kde-[0-9]*.rpm' -print)
+          test -f "$candidate"
+          for phase in baseline candidate rollback reinstall; do
+            case "$phase" in
+              baseline|rollback) dnf -y downgrade "$validation_dir/baseline.rpm"; expected=0.201.beta6.1.fc45 ;;
+              candidate|reinstall) dnf -y upgrade "$candidate"; expected=$(rpm -qp --qf '%{RELEASE}' "$candidate") ;;
+            esac
+            test "$(rpm -q --qf '%{RELEASE}' mirivue-kde)" = "$expected"
+            mirivue-kde --version
+            dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+            sha256sum -c "$validation_dir/temoin.sha256"
+            grep -q '^stable-audit=preserver$' "$XDG_CONFIG_HOME/pdenams/Mirivue.conf"
+            echo "cycle-rpm: $phase réussi ($expected)"
           done
       - name: Signaler une incompatibilité de développement
         if: failure() && matrix.experimental
@@ -77,6 +124,252 @@ jobs:
           name: rpm-kde-fedora-${{ matrix.fedora }}
           path: dist/rpms/x86_64/*.rpm
           if-no-files-found: error
+
+
+  qualification-complete:
+    name: Qualification stable — suite complète (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Nœud de rendu virtuel jetable, comme dans le TestLab Wayland
+        run: |
+          sudo modprobe vgem
+          sudo udevadm settle --timeout=30
+          node=$(ls /dev/dri/renderD* | head -n 1)
+          echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
+          stat -c '%n %a %U:%G' "$node" > "$RUNNER_TEMP/qualification-node-before.txt"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Suite intégrale et vrais scénarios X11/Wayland, trois passes si tout réussit
+        run: |
+          mkdir -p qualification-artefacts
+          docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
+            -v "$PWD:/src:ro" -v "$PWD/qualification-artefacts:/artefacts" fedora:45 bash -euo pipefail -c '
+            dnf -y -q install python3 python3-pyyaml python3-rpm git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
+              dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd netpbm-progs >/dev/null
+            cp -a /src /w && cd /w
+            dnf -y -q builddep packaging/fedora/mirivue-kde.spec >/dev/null
+            dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
+            dnf -y -q --setopt=install_weak_deps=False install plasma-workspace-libs >/dev/null
+            mkdir -p tools
+            cp -a /usr/lib64/mirivue-kde/tools/. tools/
+            cmake -S native -B qualification-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DMIRIVUE_NAVIGATOR_TESTS=ON
+            cmake --build qualification-native --parallel 2
+            useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-testlab
+            groupadd --system testlab-rendu
+            usermod -aG testlab-rendu mirivue-testlab
+            chgrp testlab-rendu /dev/dri/renderD128
+            chmod 0660 /dev/dri/renderD128
+            export MIRIVUE_TESTLAB_USER=mirivue-testlab MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT=1
+            export MIRIVUE_TESTLAB_REQUIRE_DISPLAY=1 MIRIVUE_TESTLAB_REQUIRE_WAYLAND=1
+            export MIRIVUE_TEST_PRIVATE_TMPFS=1 MIRIVUE_TEST_DESKTOP_WORKER=1
+            export MIRIVUE_TEST_PRESENTATION_LIBRARY="$PWD/qualification-native/libmirivue-item-presentation.so"
+            export MIRIVUE_TEST_DOLPHIN_LIBRARY="$PWD/qualification-native/libmirivue-dolphin-view.so"
+            export MIRIVUE_TEST_NAVIGATOR_EXECUTABLE="$PWD/qualification-native/mirivue-navigator-check"
+            export MIRIVUE_TEST_KIO_LIST_EXECUTABLE="$PWD/qualification-native/mirivue-kio-list"
+            export MIRIVUE_TEST_PLACES_LIBRARY="$PWD/qualification-native/libmirivue-kio-places-widget.so"
+            export MIRIVUE_TEST_OPEN_WITH_REFERENCE="$PWD/qualification-native/libmirivue-open-with-reference.so"
+            for pass in 1 2 3; do
+              MIRIVUE_QUALIFICATION_OUTPUT="/artefacts/pass-$pass" python3 packaging/qualifier_suites_stable.py
+            done'
+      - name: Permissions de l'hôte inchangées
+        if: always()
+        run: |
+          stat -c '%n %a %U:%G' "$RENDER_NODE" > "$RUNNER_TEMP/qualification-node-after.txt"
+          cmp "$RUNNER_TEMP/qualification-node-before.txt" "$RUNNER_TEMP/qualification-node-after.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qualification-stable-suites
+          path: qualification-artefacts/
+          if-no-files-found: error
+          retention-days: 14
+
+
+  plasma-vm:
+    name: Plasma Wayland complet — RPM installé (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: État KVM initial, sans changement de permissions
+        run: |
+          sudo udevadm settle --timeout=30
+          stat -c '%n %a %U:%G' /dev/kvm > "$RUNNER_TEMP/plasma-kvm-before.txt"
+          git status --porcelain > "$RUNNER_TEMP/plasma-git-before.txt"
+      - uses: actions/cache@v4
+        with:
+          path: ~/iso-cache
+          key: iso-${{ hashFiles('tests/testlab/plasma_vm/image.env') }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: rpm-commit
+      - name: Image Fedora KDE épinglée et vérifiée
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests/testlab/plasma_vm/recuperer_image.sh ~/iso-cache | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Dépendances signées et RPM candidat pour l'invité sans réseau
+        shell: bash
+        run: |
+          set -euo pipefail
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/preparer_depot.sh ~/iso-cache/"$ISO_NOM" "$PWD/rpm-commit" "$PWD/depot" 2>&1 | tee depot.log
+      - name: Prototype existant, session Plasma réelle et création par clavier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plasma-artefacts
+          tests/testlab/plasma_vm/conteneur.sh tests/testlab/plasma_vm/sonde_kvm.sh plasma-artefacts/sonde-kvm.json
+          . tests/testlab/plasma_vm/image.env
+          tests/testlab/plasma_vm/conteneur.sh python3 tests/testlab/plasma_vm/pilote.py \
+            --iso ~/iso-cache/"$ISO_NOM" --artefacts plasma-artefacts \
+            --paquets "$PWD/depot/repo" --attendu "$PWD/depot/attendu.json" --delai 1500 --saisie
+      - name: Nettoyage et permissions KVM identiques
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" plasma-artefacts 2>/dev/null || true
+          stat -c '%n %a %U:%G' /dev/kvm > "$RUNNER_TEMP/plasma-kvm-after.txt"
+          cmp "$RUNNER_TEMP/plasma-kvm-before.txt" "$RUNNER_TEMP/plasma-kvm-after.txt"
+          cp "$RUNNER_TEMP/plasma-kvm-before.txt" "$RUNNER_TEMP/plasma-kvm-after.txt" plasma-artefacts/
+          if pgrep -af '(^|/)qemu-system-x86_64( |$)'; then exit 1; fi
+          if compgen -G "$RUNNER_TEMP/plasma-vm-*" >/dev/null; then exit 1; fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          cat plasma-artefacts/resume.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plasma-wayland-complet
+          path: |
+            plasma-artefacts/
+            depot.log
+            depot/attendu.json
+          if-no-files-found: error
+          retention-days: 14
+
+  medias-session:
+    name: Médias PipeWire et session de dix minutes (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    container:
+      image: fedora:45
+      options: --init
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Lire les médias du paquet installé dans une session audio jetable
+        run: |
+          set -euo pipefail
+          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-utils pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils gdb
+          useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-media
+          validation_home=$(mktemp -d /tmp/mirivue-media-XXXXXX)
+          mkdir -m 700 "$validation_home/runtime"
+          chown -R mirivue-media:mirivue-media "$validation_home"
+          mkdir -p medias-artefacts
+          status=0
+          runuser -u mirivue-media -- env HOME="$validation_home" XDG_RUNTIME_DIR="$validation_home/runtime" \
+            XDG_CONFIG_HOME="$validation_home/config" XDG_DATA_HOME="$validation_home/data" \
+            XDG_CACHE_HOME="$validation_home/cache" XDG_STATE_HOME="$validation_home/state" \
+            PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=xcb PYTHONFAULTHANDLER=1 \
+            dbus-run-session -- xvfb-run -a timeout 900 gdb -q -batch --return-child-result \
+            -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
+            --args python3 "$PWD/packaging/qualifier_medias_stable.py" \
+            > medias-artefacts/resultat.log 2>&1 || status=$?
+          cp "$validation_home"/*.log "$validation_home"/*.json medias-artefacts/ || true
+          cat medias-artefacts/resultat.log
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medias-pipewire-session
+          path: medias-artefacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  fichiers-images:
+    name: Fichiers réels sur ${{ matrix.filesystem }}
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        filesystem: [ext4, ntfs3]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Formater et monter uniquement une image jetable
+        env:
+          TEST_FS: ${{ matrix.filesystem }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/mirivue-images" "$RUNNER_TEMP/mirivue-montage" fichiers-images-artefacts
+          truncate -s 256M "$RUNNER_TEMP/mirivue-images/test.img"
+          docker run --rm -v "$RUNNER_TEMP/mirivue-images:/images" -e TEST_FS fedora:45 bash -euo pipefail -c '
+            dnf -y -q install e2fsprogs ntfsprogs >/dev/null
+            if [ "$TEST_FS" = ext4 ]; then mkfs.ext4 -F /images/test.img; else mkntfs -F -Q /images/test.img; fi'
+          options=loop
+          if [ "$TEST_FS" = ntfs3 ]; then
+            sudo modprobe ntfs3
+            options=loop,uid=0,gid=0,umask=0077
+          fi
+          sudo mount -t "$TEST_FS" -o "$options" "$RUNNER_TEMP/mirivue-images/test.img" "$RUNNER_TEMP/mirivue-montage"
+          findmnt --target "$RUNNER_TEMP/mirivue-montage" -n -o FSTYPE,TARGET,OPTIONS | tee fichiers-images-artefacts/montage.txt
+          [ "$(findmnt --target "$RUNNER_TEMP/mirivue-montage" -n -o FSTYPE)" = "$TEST_FS" ]
+      - name: Copie, déplacement, conflit annulé, Corbeille et restauration KIO
+        env:
+          TEST_FS: ${{ matrix.filesystem }}
+        run: |
+          set -euo pipefail
+          docker run --rm --init -v "$PWD:/src:ro" -v "$RUNNER_TEMP/mirivue-montage:/fs:rw" \
+            -e MIRIVUE_FILESYSTEM_TYPE="$TEST_FS" -e MIRIVUE_FILESYSTEM_ROOT=/fs fedora:45 bash -euo pipefail -c '
+            dnf -y -q --setopt=tsflags= install dbus-daemon /src/dist/rpms/*.rpm >/dev/null
+            export PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=offscreen
+            export PATH=/usr/lib64/mirivue-kde/tools:$PATH
+            dbus-run-session -- timeout 180 python3 /src/packaging/qualifier_fichiers_stable.py
+            ' 2>&1 | tee fichiers-images-artefacts/resultat.log
+      - name: Démonter l'image de test
+        if: always()
+        run: |
+          if mountpoint -q "$RUNNER_TEMP/mirivue-montage"; then sudo umount "$RUNNER_TEMP/mirivue-montage"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fichiers-images-${{ matrix.filesystem }}
+          path: fichiers-images-artefacts/
+          if-no-files-found: error
+          retention-days: 14
 
   testlab:
     name: TestLab — vraie fenêtre sous Xvfb (Fedora 45)
@@ -145,6 +438,7 @@ jobs:
         run: |
           # Ephemeral GitHub-hosted runner only: vgem is a GPU-less render node.
           sudo modprobe vgem
+          sudo udevadm settle --timeout=30
           node=$(ls /dev/dri/renderD* | head -n 1)
           echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
           # Outside the workspace: actions/checkout cleans it.

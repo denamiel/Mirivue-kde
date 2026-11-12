@@ -1,0 +1,197 @@
+"""Exercise installed Mirivue playback against a disposable PipeWire sink."""
+import json
+import math
+import os
+from pathlib import Path
+import struct
+import subprocess
+import time
+import wave
+
+# The workflow supplies a dedicated user, HOME, runtime, X server and D-Bus.
+assert os.geteuid() != 0, 'run as the disposable test account'
+root = Path(os.environ['HOME'])
+assert root.name.startswith('mirivue-media-'), 'dedicated temporary HOME required'
+pulse_dir = Path(os.environ['XDG_RUNTIME_DIR']) / 'pulse'
+pulse_dir.mkdir(mode=0o700, exist_ok=True)
+pulse_socket = pulse_dir / 'native'
+os.environ['PULSE_SERVER'] = 'unix:' + str(pulse_socket)
+processes = []
+logs = []
+try:
+    for command in (['pipewire'], ['wireplumber'], ['pipewire-pulse']):
+        log = (root / (command[0] + '.log')).open('w')
+        logs.append(log)
+        processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT))
+    deadline = time.monotonic() + 20
+    while not pulse_socket.is_socket():
+        assert all(p.poll() is None for p in processes), 'an audio daemon exited during startup'
+        assert time.monotonic() < deadline, 'PipeWire Pulse socket did not appear'
+        time.sleep(.1)
+    while subprocess.run(['pactl', 'info'], capture_output=True).returncode:
+        assert time.monotonic() < deadline, 'PipeWire Pulse server did not start'
+        time.sleep(.1)
+    subprocess.run(['pactl', 'load-module', 'module-null-sink', 'sink_name=mirivue_validation'], check=True)
+    subprocess.run(['pactl', 'set-default-sink', 'mirivue_validation'], check=True)
+    audio = root / 'tone.wav'
+    with wave.open(str(audio), 'wb') as output:
+        output.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
+        second = b''.join(struct.pack('<h', int(6000 * math.sin(2 * math.pi * 440 * n / 48000)))
+                          for n in range(48000))
+        output.writeframes(second * 30)
+    video = root / 'pattern.webm'
+    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10',
+                    '-i', str(audio), '-t', '15', '-c:v', 'libvpx', '-c:a', 'libvorbis', str(video)], check=True)
+    # Apply the same backend selection as the installed Fedora launcher.
+    if any(Path(prefix + '/qt6/plugins/multimedia/libgstreamermediaplugin.so').is_file()
+           for prefix in ('/usr/lib64', '/usr/lib')):
+        os.environ['QT_MEDIA_BACKEND'] = 'gstreamer'
+    from PySide6.QtCore import QSettings, QItemSelectionModel
+    from PySide6.QtMultimedia import QMediaPlayer
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from unittest.mock import patch
+    from mirivue.app import Window, prepare_audio_stream_identity
+    from mirivue.background_listing import listed_media_entry
+    prepare_audio_stream_identity()
+    app = QApplication(['Mirivue KDE'])
+    settings = QSettings(str(root / 'settings.ini'), QSettings.IniFormat)
+    settings.setValue('media/start-preview-panel', False)
+    with patch('mirivue.app.mirivue_settings', return_value=settings):
+        window = Window()
+    window.show()
+
+    def wait_for(predicate, message, timeout=20):
+        until = time.monotonic() + timeout
+        while not predicate() and time.monotonic() < until:
+            app.processEvents()
+            QTest.qWait(100)
+        assert predicate(), message
+
+    # Exercise the application's actual asynchronous image and PDF previews.
+    from PySide6.QtGui import QImage, QColor, QPainter, QPdfWriter
+    wait_for(lambda: not window.scanning, 'initial directory scan did not finish')
+    window.visible_watcher.blockSignals(True)
+    image_path = root / 'preview.png'
+    image = QImage(320, 180, QImage.Format_RGB32)
+    image.fill(QColor('#3a7db8'))
+    assert image.save(str(image_path))
+    pdf_path = root / 'preview.pdf'
+    writer = QPdfWriter(str(pdf_path))
+    painter = QPainter(writer)
+    assert painter.isActive()
+    painter.drawText(100, 200, 'Mirivue stable qualification')
+    painter.end()
+    # QPainter retains its paint device until the wrapper is destroyed.
+    del painter
+    del writer
+    assert pdf_path.read_bytes().rstrip().endswith(b'%%EOF'), 'PDF fixture is not finalized'
+    window.preview_dock.show()
+    def select_media(path):
+        # Feed the same real view selection read by the preview debounce timer.
+        # Directly setting _preview_pending would be overwritten by that timer.
+        window.model.clear()
+        window.model.add(listed_media_entry(path))
+        index = window.proxy.index(0, 0)
+        assert index.isValid()
+        window.active_view().selectionModel().setCurrentIndex(
+            index, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+        window.update_media_preview()
+
+    failures = []
+    for preview in (image_path, pdf_path):
+        try:
+            window.media_image.clear_preview()
+            select_media(preview)
+            wait_for(lambda: not window.media_image._image.isNull(), 'preview did not render: ' + preview.suffix)
+            if preview == image_path:
+                assert window.media_image._image.pixelColor(0, 0).name() == '#3a7db8'
+            else:
+                assert window._pdf_page_count == 1
+            wait_for(lambda: window._preview_worker is None and window._pdf_worker is None,
+                     'preview worker did not finish')
+            print('preview passed: ' + preview.suffix, flush=True)
+        except AssertionError as error:
+            failures.append(str(error))
+            print('preview failed: ' + str(error), flush=True)
+
+    def active_stream():
+        result = subprocess.run(['pactl', '-f', 'json', 'list', 'sink-inputs'],
+                                capture_output=True, text=True, check=True)
+        clients_result = subprocess.run(['pactl', '-f', 'json', 'list', 'clients'],
+                                        capture_output=True, text=True, check=True)
+        clients = {str(c['index']): c.get('properties', {})
+                   for c in json.loads(clients_result.stdout)}
+        for stream in json.loads(result.stdout):
+            properties = stream.get('properties', {})
+            # Native PipeWire streams keep the process identity on their client.
+            # Pulse clients may also repeat it directly on the stream.
+            client = clients.get(str(stream.get('client')), {})
+            pid = properties.get('application.process.id', client.get('application.process.id'))
+            if (str(pid) == str(os.getpid()) and stream.get('corked') is False
+                    and stream.get('mute') is False):
+                print('audio stream: ' + json.dumps(dict(pid=pid, client=stream.get('client'),
+                      sink=stream.get('sink'), corked=False, mute=False)), flush=True)
+                return True
+        return False
+
+    results = []
+    for media in (audio, video):
+        select_media(media)
+        window.play_media_at(0)
+        player = window.media_player
+        assert player is not None
+        wait_for(lambda: player.position() > 400, 'playback did not advance')
+        if media == video:
+            assert window.media_audio.isMuted(), 'video should initially be silent'
+            wait_for(lambda: player.videoSink().videoFrame().isValid(), 'no decoded video frame')
+        window.set_media_volume(60, False)
+        wait_for(active_stream, 'no active Mirivue stream through PipeWire Pulse')
+        assert not window.media_audio.isMuted()
+        window.toggle_media_playback()
+        wait_for(lambda: player.playbackState() == QMediaPlayer.PausedState, 'pause failed')
+        position = player.position()
+        QTest.qWait(250)
+        assert abs(player.position() - position) < 150, 'paused playback advanced'
+        window.toggle_media_playback()
+        wait_for(lambda: player.position() > position + 200, 'resume failed')
+        assert player.error() == QMediaPlayer.NoError, player.errorString()
+        results.append(media.suffix)
+        window.stop_media_playback()
+    assert not failures, '; '.join(failures)
+    # Ten minutes in the actual window; keep the event loop and backend alive.
+    started = time.monotonic()
+    rounds = 0
+    while time.monotonic() - started < 600:
+        assert all(p.poll() is None for p in processes), 'audio daemon exited'
+        select_media(audio)
+        window.play_media_at(0)
+        wait_for(lambda: window.media_player.position() > 200, 'session playback failed')
+        window.stop_media_playback()
+        window.set_split_view(rounds % 2 == 0, navigate_new=False)
+        QTest.qWait(1000)
+        app.processEvents()
+        rounds += 1
+    window.quit_requested = True
+    wait_for(window.close, 'window shutdown did not complete')
+    print(json.dumps(dict(audio=True, video_frame=True, image_preview=True, pdf_preview=True, pipewire_stream=True,
+                          pause_resume=True, video_unmute=True, formats=results,
+                          session_seconds=round(time.monotonic() - started), rounds=rounds)), flush=True)
+finally:
+    for command, name in ((['pactl', '-f', 'json', 'list', 'sink-inputs'], 'sink-inputs.json'),
+                          (['pw-dump'], 'pipewire-state.json')):
+        try:
+            state = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            (root / name).write_text(state.stdout + '\n' + state.stderr)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            (root / name).write_text(str(error))
+    for process in reversed(processes):
+        process.terminate()
+    for process in processes:
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+    for log in logs:
+        log.close()

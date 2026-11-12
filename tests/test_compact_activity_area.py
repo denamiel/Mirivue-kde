@@ -1,5 +1,6 @@
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,12 +31,30 @@ class TestCompactActivityArea(unittest.TestCase):
         self.assertIn('self.activity_message_label.hide()', self.app)
 
     def test_only_one_priority_progress_is_visible(self):
-        self.assertIn('transfer and not foreground', self.app)
-        self.assertIn('task and not foreground and not transfer', self.app)
+        from PySide6.QtWidgets import QApplication, QLabel, QProgressBar
+        from mirivue.app import Window
+        app = QApplication.instance() or QApplication([])
+        for foreground in (False, True):
+            for task in (False, True):
+                with self.subTest(foreground=foreground, task=task):
+                    label, progress = QLabel(), QProgressBar()
+                    owner = SimpleNamespace(bar=SimpleNamespace(isVisible=lambda: foreground),
+                        job_queue=[], jobs_busy=lambda: task, job_label=label,
+                        job_progress=progress, update_activity_entry_points=lambda: None)
+                    Window.sync_activity_progress_visibility(owner)
+                    self.assertEqual(not label.isHidden(), task and not foreground)
+                    self.assertEqual(not progress.isHidden(), task and not foreground)
+                    label.close(); progress.close()
 
     def test_narrow_sidebar_uses_vertical_progress_layouts(self):
         self.assertIn('footer = QVBoxLayout()', self.jobs)
-        self.assertIn('row = QVBoxLayout()', self.transfers)
+        from mirivue.background_transfers import BackgroundTransfers
+        owner = SimpleNamespace()
+        layout = SimpleNamespace(addWidget=lambda *_: self.fail('duplicate native transfer progress'),
+                                 addLayout=lambda *_: self.fail('duplicate native transfer progress'))
+        BackgroundTransfers.create_transfer_footer(owner, layout)
+        self.assertEqual(owner.transfer_history, [])
+        self.assertFalse(owner.transfer_quitting)
 
     def test_preview_feedback_stays_in_preview_panel(self):
         self.assertIn('def show_preview_message', self.media)

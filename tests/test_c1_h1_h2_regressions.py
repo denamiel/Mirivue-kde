@@ -726,5 +726,115 @@ class TestNativeHelpersRejectIncompleteUrls(IsolatedKioTestCase):
         self.assertEqual(state(source), 'KEEP')
 
 
+class TestACancellationKeepsService(IsolatedKioTestCase):
+    def cancel_confirmation(self, command):
+        services.shutdown_kio_service()
+        config = Path(os.environ['XDG_CONFIG_HOME']) / 'kiorc'
+        previous = config.read_text()
+        self.addCleanup(config.write_text, previous)
+        self.addCleanup(services.shutdown_kio_service)
+        config.write_text('[Confirmations]\nConfirmTrash=true\nConfirmDelete=true\n')
+        prior = self.directory / 'prior-folder'
+        ok, error = services.create_directory(str(self.directory), prior.name)
+        self.assertTrue(ok, error)
+        services._kio_service_request('state')
+        process = services._kio_process
+        self.assertTrue(services._kio_undo_available)
+        victim = write(self.directory / 'victim.txt', 'KEEP')
+        started = time.monotonic()
+        require_visible = os.environ.get('MIRIVUE_CONFIRMATION_VISIBLE') == '1'
+        cancel_time = None
+        visible_seen = False
+        def dialog_visible():
+            import subprocess
+            result = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(process.pid)],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=2)
+            return result.returncode == 0 and bool(result.stdout.strip())
+        def cancel_when_ready():
+            nonlocal cancel_time, visible_seen
+            if cancel_time is not None:
+                return True
+            if time.monotonic() - started < 0.8:
+                return False
+            if require_visible:
+                visible_seen = dialog_visible()
+                if not visible_seen:
+                    return False
+            cancel_time = time.monotonic()
+            return True
+        ok, error = services._kio_service_request(command, sources=[victim.as_uri()],
+            cancelled=cancel_when_ready, timeout=15)
+        if require_visible:
+            self.assertTrue(visible_seen, 'the real confirmation window was never observed')
+            deadline = time.monotonic() + 1
+            while dialog_visible() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertFalse(dialog_visible(), 'the cancelled confirmation must close')
+        self.assertFalse(ok)
+        self.assertEqual(error, 'Transfert annulé.')
+        self.assertIs(services._kio_process, process, 'cancelling must not restart the service')
+        self.assertIsNone(process.poll())
+        self.assertIsNotNone(cancel_time)
+        self.assertLess(time.monotonic() - cancel_time, 4)
+        self.assertEqual(victim.read_text(), 'KEEP')
+        self.assertEqual(self.trashed(), [])
+        self.assertTrue(services._kio_undo_available)
+        ok, error = services.undo_kio()
+        self.assertTrue(ok, error)
+        self.assertFalse(prior.exists(), 'earlier undo history must remain usable')
+        self.assertEqual(victim.read_text(), 'KEEP')
+
+    def test_cancel_trash_confirmation_preserves_service_and_history(self):
+        self.cancel_confirmation('trash')
+
+    def test_cancel_delete_confirmation_preserves_service_and_history(self):
+        self.cancel_confirmation('delete')
+
+
+@unittest.skipUnless(os.environ.get('MIRIVUE_TEST_DESKTOP_WORKER') == '1',
+                     'requires the explicitly installed Plasma desktop worker')
+class TestDesktopDropsUseLocalSources(IsolatedKioTestCase):
+    def desktop_file(self, name, content):
+        import glob
+        self.assertTrue(glob.glob('/usr/lib*/qt6/plugins/kf6/kio/desktop.so'),
+                        'required desktop worker missing')
+        desktop = Path(os.environ['HOME']) / 'Desktop'
+        desktop.mkdir(exist_ok=True)
+        path = write(desktop / (self.directory.name + '-' + name), content)
+        return path, QUrl('desktop:/' + path.name).toString()
+
+    def test_drop_desktop_uri_trashes_exact_item_without_false_failure(self):
+        source, uri = self.desktop_file('photo ', 'KEEP-SPACE')
+        other = write(source.with_name(source.name.rstrip()), 'OTHER')
+        harness = Harness([], 'desktop:/')
+        harness.deadline = 3
+        harness.drop_choices([uri], 'trash:/')
+        self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
+        self.assertFalse(source.exists())
+        self.assertEqual(other.read_text(), 'OTHER')
+        self.assertEqual(self.trashed(), [str(source)])
+
+    def test_drop_desktop_symlink_trashes_link_only(self):
+        target, _ = self.desktop_file('target.txt', 'TARGET')
+        link = target.with_name(target.name + '-link')
+        link.symlink_to(target.name)
+        harness = Harness([], 'desktop:/')
+        harness.deadline = 3
+        harness.drop_choices([QUrl('desktop:/' + link.name).toString()], 'trash:/')
+        self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
+        self.assertFalse(link.is_symlink())
+        self.assertEqual(target.read_text(), 'TARGET')
+        self.assertEqual(self.trashed(), [str(link)])
+
+    def test_missing_desktop_source_does_not_partially_trash_selection(self):
+        source, uri = self.desktop_file('present.txt', 'KEEP')
+        harness = Harness([], 'desktop:/')
+        harness.deadline = 3
+        harness.drop_choices([uri, uri + '-missing'], 'trash:/')
+        self.assertFalse(harness.requests[-1]['ok'])
+        self.assertEqual(source.read_text(), 'KEEP')
+        self.assertEqual(self.trashed(), [])
+
+
 if __name__ == '__main__':
     unittest.main()

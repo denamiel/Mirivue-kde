@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -20,7 +21,13 @@ class TestNativeKioSources(unittest.TestCase):
             source = (NATIVE / source_name).read_text(encoding='utf-8')
             self.assertIn('SPDX-License-Identifier: MIT', source)
             self.assertIn(f'add_executable({executable} {source_name})', cmake)
-            self.assertFalse((ROOT / 'tools' / executable).exists())
+            if (ROOT / '.git').exists():
+                tracked = subprocess.run(['git', '-c', f'safe.directory={ROOT}', 'ls-files', '--',
+                                          f'tools/{executable}'], cwd=ROOT,
+                                         capture_output=True, text=True, check=True)
+                self.assertEqual(tracked.stdout, '', 'runtime binaries must not be committed')
+            else:
+                self.assertFalse((ROOT / 'tools' / executable).exists())
         self.assertIn('add_executable(mirivue-job-progress job-progress.cpp)', cmake)
         self.assertIn('KUiServerV2JobTracker', (NATIVE / 'job-progress.cpp').read_text(encoding='utf-8'))
 

@@ -27,9 +27,9 @@
     <content_rating type="oars-1.1" />
     <url type="homepage">https://github.com/denamiel/Mirivue-kde</url>
   <releases>
-      <release version="1.0.0-beta.6" date="2026-11-08" type="development">
+      <release version="1.0.0" date="2026-11-12" type="stable">
         <description>
-          <p>Make KIO act on exactly the selected item: names ending with spaces, symbolic links and remote deletion; list dangling symbolic links.</p>
+          <p>Stable release: exact KIO file operations, cancellable KDE confirmations with undo history preserved, folder rename refresh and complete multimedia runtime dependencies.</p>
         </description>
       </release>
     </releases>

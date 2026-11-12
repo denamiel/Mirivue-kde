@@ -38,6 +38,68 @@ jobs:
           cp /home/builder/source/*.pkg.tar.zst dist/
           cd dist
           sha256sum *.pkg.tar.zst > SHA256SUMS
+      - name: Installation, mise à jour depuis bêta 6 et retour arrière jetables
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          validation_dir="$(mktemp -d)"
+          validation_home="$validation_dir/home"
+          validation_config="$validation_dir/config"
+          validation_data="$validation_dir/data"
+          validation_state="$validation_dir/state"
+          validation_cache="$validation_dir/cache"
+          mkdir -p "$validation_home" "$validation_config/pdenams" "$validation_data" "$validation_state" "$validation_cache"
+          printf '[General]\nstable-audit=preserver\n' > "$validation_config/pdenams/Mirivue.conf"
+          printf 'données utilisateur de test\n' > "$validation_home/temoin.txt"
+          sha256sum "$validation_home/temoin.txt" > "$validation_dir/temoin.sha256"
+          pacman --noconfirm -S --needed curl dbus
+          curl --fail --location --retry 2 \
+            https://github.com/denamiel/mirivue-arch/releases/download/repository/mirivue-kde-1.0.0beta6-1-x86_64.pkg.tar.zst \
+            -o "$validation_dir/baseline.pkg.tar.zst"
+          printf '9801a58f0220ef52f1cd0baf70b6ca88790965f5585db7964bf8d87a338a57cb  %s\n' "$validation_dir/baseline.pkg.tar.zst" | sha256sum -c -
+          candidates=(dist/mirivue-kde-[0-9]*.pkg.tar.zst)
+          test "${#candidates[@]}" = 1
+          candidate="${candidates[0]}"
+          candidate_version=$(pacman -Qp "$candidate" | awk '{print $2}')
+          baseline_version=$(pacman -Qp "$validation_dir/baseline.pkg.tar.zst" | awk '{print $2}')
+          test "$(vercmp "$candidate_version" "$baseline_version")" -gt 0
+          for package in "$validation_dir/baseline.pkg.tar.zst" "$candidate" "$validation_dir/baseline.pkg.tar.zst" "$candidate"; do
+            pacman --noconfirm -U "$package"
+            mirivue-kde --version
+            env HOME="$validation_home" XDG_CONFIG_HOME="$validation_config" XDG_DATA_HOME="$validation_data" \
+              XDG_STATE_HOME="$validation_state" XDG_CACHE_HOME="$validation_cache" \
+              dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+            sha256sum -c "$validation_dir/temoin.sha256"
+            grep -q '^stable-audit=preserver$' "$validation_config/pdenams/Mirivue.conf"
+          done
+      - name: Aperçus, PipeWire et session du paquet Arch installé
+        run: |
+          set -euo pipefail
+          pacman --noconfirm -S --needed pipewire pipewire-pulse wireplumber libpulse xorg-server-xvfb xorg-xauth gdb
+          useradd --system --no-create-home --home-dir /nonexistent --shell /usr/bin/nologin mirivue-media
+          validation_home=$(mktemp -d /tmp/mirivue-media-XXXXXX)
+          mkdir -m 700 "$validation_home/runtime"
+          chown -R mirivue-media:mirivue-media "$validation_home"
+          mkdir -p medias-artefacts
+          status=0
+          runuser -u mirivue-media -- env HOME="$validation_home" XDG_RUNTIME_DIR="$validation_home/runtime" \
+            XDG_CONFIG_HOME="$validation_home/config" XDG_DATA_HOME="$validation_home/data" \
+            XDG_CACHE_HOME="$validation_home/cache" XDG_STATE_HOME="$validation_home/state" \
+            PYTHONPATH=/usr/lib/mirivue-kde QT_QPA_PLATFORM=xcb PYTHONFAULTHANDLER=1 \
+            dbus-run-session -- xvfb-run -a timeout 900 gdb -q -batch --return-child-result \
+            -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
+            --args python3 "$PWD/packaging/qualifier_medias_stable.py" \
+            > medias-artefacts/resultat.log 2>&1 || status=$?
+          cp "$validation_home"/*.log "$validation_home"/*.json medias-artefacts/ || true
+          cat medias-artefacts/resultat.log
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medias-pipewire-session-arch
+          path: medias-artefacts/
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: mirivue-kde-arch-x86_64

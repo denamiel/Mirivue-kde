@@ -1,6 +1,8 @@
 """The top of the window follows Plasma without manufactured colours."""
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +18,18 @@ class TestNativePlasmaChrome(unittest.TestCase):
     def test_folder_count_has_no_visible_loading_label(self):
         self.assertNotIn("tr('Calcul en attente')", self.app)
         self.assertNotIn("tr('Informations du dossier en cours de calcul.')", self.app)
-        self.assertIn("entry.values[1] = ''", self.app)
+        from mirivue.app import Scanner
+        with tempfile.TemporaryDirectory() as folder:
+            child = Path(folder) / 'child'
+            child.mkdir()
+            scanner = Scanner(folder, False)
+            rows = []
+            scanner.initial.connect(rows.extend)
+            with patch('mirivue.directory_listing.local_entries', return_value=[(child, True, False)]):
+                scanner.run()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].values[1], '')
+            self.assertEqual(rows[0].sort_values[1], -1)
 
     def test_application_chrome_is_left_to_the_native_style(self):
         start = self.desktop.index('    def apply_chrome_background(self):')

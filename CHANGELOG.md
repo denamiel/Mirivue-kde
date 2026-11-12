@@ -1,3 +1,12 @@
+# 1.0.0 — 12 novembre 2026 — préparation stable
+
+- Fonctions gelées : aucune nouvelle fonctionnalité.
+- Annulation d’une confirmation KDE sans redémarrer le service KIO ni perdre l’historique d’annulation ; fermeture de la confirmation propre à l’opération.
+- Résolution de toutes les sources `desktop:/` avant mise à la Corbeille, avec conservation du nom exact et des liens symboliques ; refus du lot si une source ne peut être résolue.
+- Rafraîchissement du volet d’origine après renommage KIO d’un dossier.
+- Dépendances GStreamer complétées dans les paquets et vérifiées dans l’installateur source pour éviter l’arrêt natif du lecteur quand sa sortie audio manque.
+- Qualification cloud : suites intégrales, fichiers ext4/NTFS3, cycles de paquets, médias/PipeWire et session Plasma réelle. Résultats et limites dans `docs/VALIDATION-1.0.md` ; publication soumise au circuit existant.
+
 # 1.0.0-beta.6 — 8 novembre 2026
 
 - KIO agit exactement sur l’élément sélectionné : les URL complètes ne passent plus par `QUrl::fromUserInput()`, qui retirait les espaces finaux (« photo␠ » traité comme « photo »), y compris dans le fil d’Ariane, les Emplacements et les favoris.

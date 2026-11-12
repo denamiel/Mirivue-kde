@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
 Version: 1.0.0
-Release: 0.201.beta6.1%{?dist}
+Release: 1%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
-Source0: Mirivue-1.0.0-beta.6-KDE.tar.gz
+Source0: Mirivue-1.0.0-KDE.tar.gz
 Source1: valider-appstream.py
 Source2: LICENSE-KIT.txt
 ExclusiveArch: x86_64 aarch64
@@ -22,6 +22,9 @@ Requires: python3-pyside6 >= 6.8
 Requires: python3-pyside6 < 7
 Requires: python3-shiboken6, python3-pillow, python3-mutagen
 Requires: qt6-qtmultimedia, qt6-qtpdf
+# The launcher selects GStreamer when Qt ships its backend plugin.
+# autoaudiosink/pulsesink and the basic audio/video decoders are required.
+Requires: gstreamer1-plugins-good
 Requires: /usr/bin/ffmpeg, /usr/bin/ffprobe
 Requires: mediainfo, ark, 7zip, unar, perl-Image-ExifTool
 Requires: /usr/bin/mkvpropedit, /usr/bin/mkvextract
@@ -31,10 +34,10 @@ Recommends: konsole
 %global __brp_python_bytecompile %{nil}
 
 %description
-Mirivue KDE 1.0.0-beta.6 avec assistants KIO et moteur de vue natif compiles.
+Mirivue KDE 1.0.0 avec assistants KIO et moteur de vue natif compiles.
 
 %prep
-%setup -q -n Mirivue-1.0.0-beta.6-KDE
+%setup -q -n Mirivue-1.0.0-KDE
 # Le lanceur doit aussi trouver GStreamer dans le repertoire lib64 de Fedora.
 sed -i 's|/usr/lib/qt6/plugins/multimedia/libgstreamermediaplugin.so|%{_libdir}/qt6/plugins/multimedia/libgstreamermediaplugin.so|' Lancer.sh
 

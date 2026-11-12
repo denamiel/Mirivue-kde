@@ -15,10 +15,121 @@
 #include <KIO/JobUiDelegateFactory>
 #include <KIO/MkdirJob>
 #include <KIO/RestoreJob>
+#include <KIO/StatJob>
+#include <QWidget>
 
 #include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
+
+
+// DeleteOrTrashJob does not implement doKill(). Keep KDE's confirmation and
+// undo recording, but propagate cancellation to its active subjob.
+class CancellableDeleteOrTrashJob final : public KIO::DeleteOrTrashJob
+{
+public:
+    using KIO::DeleteOrTrashJob::DeleteOrTrashJob;
+
+protected:
+    bool doKill() override
+    {
+        const auto active = subjobs();
+        for (KJob *job : active) {
+            if (!job->kill(KJob::Quietly))
+                return false;
+        }
+        return true;
+    }
+};
+
+// Resolve desktop forwarding URLs before any file is touched. One request
+// owns its confirmation window, so cancelling it also destroys that dialog,
+// without restarting the service or discarding earlier undo commands.
+class FileRemovalJob final : public KCompositeJob
+{
+public:
+    FileRemovalJob(const QList<QUrl> &urls, bool trash, QObject *parent)
+        : KCompositeJob(parent), sources(urls), trashing(trash), dialogParent(new QWidget)
+    {
+        setCapabilities(KJob::Killable);
+        QObject::connect(this, &KJob::finished, dialogParent, &QObject::deleteLater);
+    }
+
+    void start() override
+    {
+        QTimer::singleShot(0, this, [this] { advance(); });
+    }
+
+protected:
+    bool doKill() override
+    {
+        const auto active = subjobs();
+        for (KJob *job : active) {
+            if (!job->kill(KJob::Quietly))
+                return false;
+        }
+        stopped = true;
+        return true;
+    }
+
+    void slotResult(KJob *job) override
+    {
+        removeSubjob(job);
+        if (stopped)
+            return;
+        if (job->error()) {
+            stopped = true;
+            setError(job->error());
+            setErrorText(job->errorString());
+            emitResult();
+            return;
+        }
+        if (auto *lookup = qobject_cast<KIO::StatJob *>(job)) {
+            const QUrl local = lookup->mostLocalUrl();
+            if (!local.isValid() || !local.isLocalFile() || local.path().isEmpty()) {
+                stopped = true;
+                setError(KIO::ERR_UNSUPPORTED_ACTION);
+                setErrorText(QStringLiteral("Cet emplacement ne fournit pas de chemin local pour la Corbeille."));
+                emitResult();
+                return;
+            }
+            sources[nextSource - 1] = local;
+            advance();
+            return;
+        }
+        stopped = true;
+        emitResult();
+    }
+
+private:
+    QList<QUrl> sources;
+    bool trashing;
+    QWidget *dialogParent;
+    qsizetype nextSource = 0;
+    bool stopped = false;
+
+    void advance()
+    {
+        if (stopped)
+            return;
+        while (trashing && nextSource < sources.size()) {
+            const QUrl source = sources[nextSource++];
+            if (source.scheme() != QStringLiteral("desktop"))
+                continue;
+            auto *lookup = KIO::mostLocalUrl(source, KIO::HideProgressInfo);
+            lookup->setUiDelegate(nullptr);
+            addSubjob(lookup);
+            return;
+        }
+        auto *job = new CancellableDeleteOrTrashJob(
+            sources, trashing ? KIO::AskUserActionInterface::Trash : KIO::AskUserActionInterface::Delete,
+            KIO::AskUserActionInterface::DefaultConfirmation, dialogParent);
+        job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, dialogParent));
+        addSubjob(job);
+        QObject::connect(job, &KJob::percentChanged, this, [this](KJob *, unsigned long value) { setPercent(value); });
+        job->start();
+    }
+};
 
 class KioService final : public QObject
 {
@@ -189,13 +300,11 @@ private:
         }
         KJob *job = nullptr;
         if (command == "trash")
-            job = new KIO::DeleteOrTrashJob(sources, KIO::AskUserActionInterface::Trash,
-                                            KIO::AskUserActionInterface::DefaultConfirmation, this);
+            job = new FileRemovalJob(sources, true, this);
         else if (command == "restore")
             job = KIO::restoreFromTrash(sources);
         else if (command == "delete")
-            job = new KIO::DeleteOrTrashJob(sources, KIO::AskUserActionInterface::Delete,
-                                            KIO::AskUserActionInterface::DefaultConfirmation, this);
+            job = new FileRemovalJob(sources, false, this);
         else if (command == "link")
             job = KIO::link(sources, destination);
         else if (command == "copyas")
@@ -221,7 +330,7 @@ private:
         });
         QObject::connect(job, &KJob::result, this, [this, id](KJob *done) { complete(id, done); });
         if (command == "trash" || command == "delete")
-            static_cast<KIO::DeleteOrTrashJob *>(job)->start();
+            job->start();
     }
 
     void handle(const QJsonObject &request)
