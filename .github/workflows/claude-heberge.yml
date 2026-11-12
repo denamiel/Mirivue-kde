@@ -74,6 +74,19 @@ jobs:
               print("Diagnostic Claude : format inattendu")
               raise SystemExit(0)
 
+          # N'afficher que les codes HTTP entiers valides du resultat.
+          # Les chaines et booleens ne sont pas acceptes comme codes.
+          statuses = sorted({
+              m["api_error_status"] for m in messages
+              if isinstance(m, dict) and m.get("type") == "result"
+              and m.get("is_error") is True
+              and type(m.get("api_error_status")) is int
+              and 100 <= m["api_error_status"] <= 599
+          })
+          for status in statuses:
+              print("Code HTTP du resultat Claude : " + str(status))
+          if not statuses:
+              print("Code HTTP du resultat Claude : absent")
           texts = []
           for message in messages:
               if not isinstance(message, dict):
@@ -97,14 +110,21 @@ jobs:
           rules = (
               ("authentification", ("authentication", "unauthorized", "invalid api key",
                                    "oauth token", "token expired", "not logged in", "401")),
-              ("quota ou limitation", ("rate_limit", "rate limit", "usage limit", "quota", "429")),
+              ("quota ou limitation", ("rate_limit", "rate limit", "usage limit", "session limit", "weekly limit", "quota", "429")),
               ("facturation", ("billing", "credit balance", "payment required")),
               ("modele indisponible", ("model not found", "invalid model", "model_not_found")),
               ("service ou reseau", ("overloaded", "connection error", "timeout", "503", "529")),
               ("acces refuse", ("permission denied", "forbidden", "403")),
           )
           found = [label for label, patterns in rules if any(p in error for p in patterns)]
-          print("Diagnostic Claude : indices textuels, sans preuve definitive")
+          if 429 in statuses:
+              found.append("quota ou limitation")
+          if any(s in (401, 403) for s in statuses):
+              found.append("authentification ou autorisation")
+          if any(s >= 500 for s in statuses):
+              found.append("service distant")
+          found = list(dict.fromkeys(found))
+          print("Diagnostic Claude : indices textuels et HTTP, sans preuve definitive")
           for label in found:
               print("Categorie possible : " + label)
           if not found:
