@@ -37,7 +37,7 @@ try:
     # Apply the same backend selection as the installed Fedora launcher.
     if Path('/usr/lib64/qt6/plugins/multimedia/libgstreamermediaplugin.so').is_file():
         os.environ['QT_MEDIA_BACKEND'] = 'gstreamer'
-    from PySide6.QtCore import QSettings
+    from PySide6.QtCore import QSettings, QItemSelectionModel
     from PySide6.QtMultimedia import QMediaPlayer
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
@@ -62,6 +62,7 @@ try:
     # Exercise the application's actual asynchronous image and PDF previews.
     from PySide6.QtGui import QImage, QColor, QPainter, QPdfWriter
     wait_for(lambda: not window.scanning, 'initial directory scan did not finish')
+    window.visible_watcher.blockSignals(True)
     image_path = root / 'preview.png'
     image = QImage(320, 180, QImage.Format_RGB32)
     image.fill(QColor('#3a7db8'))
@@ -77,15 +78,22 @@ try:
     del writer
     assert pdf_path.read_bytes().rstrip().endswith(b'%%EOF'), 'PDF fixture is not finalized'
     window.preview_dock.show()
+    def select_media(path):
+        # Feed the same real view selection read by the preview debounce timer.
+        # Directly setting _preview_pending would be overwritten by that timer.
+        window.model.clear()
+        window.model.add(listed_media_entry(path))
+        index = window.proxy.index(0, 0)
+        assert index.isValid()
+        window.active_view().selectionModel().setCurrentIndex(
+            index, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+        window.update_media_preview()
+
     failures = []
     for preview in (image_path, pdf_path):
         try:
             window.media_image.clear_preview()
-            row = listed_media_entry(preview)
-            window._preview_playlist = [row]
-            window._preview_index = 0
-            window._preview_pending = row
-            window.start_media_preview()
+            select_media(preview)
             wait_for(lambda: not window.media_image._image.isNull(), 'preview did not render: ' + preview.suffix)
             if preview == image_path:
                 assert window.media_image._image.pixelColor(0, 0).name() == '#3a7db8'
@@ -106,7 +114,7 @@ try:
 
     results = []
     for media in (audio, video):
-        window._preview_playlist = [listed_media_entry(media)]
+        select_media(media)
         window.play_media_at(0)
         player = window.media_player
         assert player is not None
@@ -133,7 +141,7 @@ try:
     rounds = 0
     while time.monotonic() - started < 600:
         assert all(p.poll() is None for p in processes), 'audio daemon exited'
-        window._preview_playlist = [listed_media_entry(audio)]
+        select_media(audio)
         window.play_media_at(0)
         wait_for(lambda: window.media_player.position() > 200, 'session playback failed')
         window.stop_media_playback()
