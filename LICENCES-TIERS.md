@@ -67,11 +67,13 @@ restent fournis par KDE/la distribution, sans copie de leurs exécutables.
 
 ## Code natif original sous MIT
 
-Les vingt et un fichiers suivants portent un en-tête MIT ; les sources Dolphin ne
+Les vingt-trois fichiers suivants portent un en-tête MIT ; les sources Dolphin ne
 sont pas incluses dans cette liste.
 
+- `native/clipboard-paste.cpp`
 - `native/desktop-dialogs.cpp`
 - `native/desktop-shortcuts.cpp`
+- `native/file-properties.cpp`
 - `native/item-presentation.cpp`
 - `native/job-progress.cpp`
 - `native/kio-applications.cpp`
