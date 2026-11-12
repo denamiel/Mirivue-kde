@@ -83,3 +83,17 @@ test("rapport et nettoyage de captures synthetiques sur le runner", () => {
   assert.equal(fs.existsSync(path.join(temp, "claude-execution-output.json")), false);
   fs.rmdirSync(dir); fs.rmdirSync(temp);
 });
+
+test("codes de preparation fermes et rapport incomplet rouge", () => {
+  assert.deepEqual(analyse([{ type: "probe_status", code: SECRET }]).preflight, []);
+  assert.deepEqual(analyse([{ type: "probe_status", code: "versions_inattendues" }]).preflight, ["versions_inattendues"]);
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "claude-compare-fail-"));
+  const result = spawnSync(process.execPath, ["packaging/claude_comparaison.mjs", "report"], {
+    cwd: process.cwd(), encoding: "utf8",
+    env: { ...process.env, RUNNER_TEMP: temp, GITHUB_WORKSPACE: process.cwd(), ACTION_OUTCOME: "failure" },
+  });
+  assert.equal(result.status, 1);
+  assert.ok(result.stdout.includes("deux_echecs"));
+  assert.ok(!result.stdout.includes(SECRET));
+  fs.rmdirSync(temp);
+});

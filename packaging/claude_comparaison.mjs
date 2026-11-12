@@ -56,6 +56,9 @@ export function analyse(messages, errorText = "") {
         typeof result.result === "string" && result.result.trim() === "OK",
     http: Number.isInteger(result?.api_error_status) && result.api_error_status >= 100 &&
           result.api_error_status <= 599 ? result.api_error_status : null,
+    preflight: [...new Set(rows.filter(m => m.type === "probe_status" &&
+      ["versions_inattendues", "consigne_action_differente", "lancement_ou_collecte_en_echec"].includes(m.code))
+      .map(m => m.code))],
     codes: [...codes].sort(),
     indices: Object.entries(REASONS).filter(([, re]) => re.test(text)).map(([key]) => key),
   };
@@ -134,7 +137,8 @@ async function main() {
     try {
       const effectivePrompt = privateRead(path.join(temp, "claude-prompts/claude-prompt.txt")).trim();
       if (effectivePrompt !== PROMPT) {
-        console.log("SDK direct : consigne_action_differente"); return 1;
+        write("direct.jsonl", JSON.stringify({ type: "probe_status", code: "consigne_action_differente" }) + "\n");
+        return 1;
       }
       const actionDir = path.join(root, ".compare-action");
       const requireFromAction = createRequire(path.join(actionDir, "package.json"));
@@ -142,7 +146,8 @@ async function main() {
       const executable = path.join(os.homedir(), ".local/bin/claude");
       const version = execFileSync(executable, ["--version"], { encoding: "utf8", timeout: 10000 });
       if (pkg.version !== "0.3.322" || !/^2\.1\.322\b/.test(version)) {
-        console.log("SDK direct : versions_inattendues"); return 1;
+        write("direct.jsonl", JSON.stringify({ type: "probe_status", code: "versions_inattendues" }) + "\n");
+        return 1;
       }
       // Réutiliser exactement l'installation de l'action ; aucun npm install ici.
       const { query } = await import(pathToFileURL(requireFromAction.resolve("@anthropic-ai/claude-agent-sdk")).href);
@@ -153,6 +158,7 @@ async function main() {
     } catch (error) {
       // Collection privée ; aucun message d'exception libre dans stdout.
       try { write("direct.stderr", typeof error?.message === "string" ? error.message : ""); } catch {}
+      try { write("direct.jsonl", JSON.stringify({ type: "probe_status", code: "lancement_ou_collecte_en_echec" }) + "\n"); } catch {}
       console.log("SDK direct : lancement_ou_collecte_en_echec");
       return 1;
     }
