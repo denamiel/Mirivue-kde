@@ -3,6 +3,9 @@ name: Diagnostic Claude - tests du filtre sans secret
 on:
   pull_request:
     paths:
+      - 'packaging/claude_comparaison.mjs'
+      - 'tests/test_claude_comparaison.mjs'
+      - '.github/workflows/claude-comparaison.yml'
       - 'packaging/diagnostic_claude_sdk.py'
       - 'tests/test_diagnostic_claude_sdk.py'
       - '.github/workflows/diagnostic-claude-tests.yml'
@@ -22,3 +25,5 @@ jobs:
           persist-credentials: false
       - name: Verifier le filtre et la suppression des fichiers prives
         run: python3 -m unittest discover -s tests -p test_diagnostic_claude_sdk.py -v
+      - name: Verifier la comparaison avec un SDK simule sans secret ni reseau
+        run: node --test tests/test_claude_comparaison.mjs
