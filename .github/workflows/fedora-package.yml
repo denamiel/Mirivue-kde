@@ -32,7 +32,7 @@ jobs:
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Préparer Fedora
-        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm
+        run: dnf -y install git rpm-build python3 dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon python3-pyyaml python3-rpm plasma-workspace
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -59,6 +59,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           MIRIVUE_TEST_PRIVATE_TMPFS: "1"
+          MIRIVUE_TEST_DESKTOP_WORKER: "1"
         run: |
           mkdir -p tools
           cp -a /usr/lib64/mirivue-kde/tools/. tools/
