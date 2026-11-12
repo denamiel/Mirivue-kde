@@ -70,7 +70,7 @@ jobs:
           export XDG_STATE_HOME="$(mktemp -d)"
           export XDG_CONFIG_HOME="$(mktemp -d)"
           export PYTHONPATH="$PWD:$PWD/tests"
-          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions delete_action_state publication_controlee protection_main; do
+          for suite in native_file_management_gui background_close_gui panel_transfers_gui session_edge_cases_gui transfer_selection_gui dolphin_parity_gui remaining_parity_gui context_rename_gui kio_progress_routing_gui transfer_thumbnail_refresh native_kio_transfers_integration native_clipboard_gui c1_h1_h2_regressions ci_validation_guards delete_action_state publication_controlee protection_main; do
             dbus-run-session -- timeout 180 python3 -m unittest discover -s tests -p "test_${suite}.py" -v
           done
       - name: Annuler une confirmation KDE effectivement visible sous X11
@@ -103,6 +103,7 @@ jobs:
       - name: Nœud de rendu virtuel jetable, comme dans le TestLab Wayland
         run: |
           sudo modprobe vgem
+          sudo udevadm settle --timeout=30
           node=$(ls /dev/dri/renderD* | head -n 1)
           echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
           stat -c '%n %a %U:%G' "$node" > "$RUNNER_TEMP/qualification-node-before.txt"
@@ -118,7 +119,7 @@ jobs:
           mkdir -p qualification-artefacts
           docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
             -v "$PWD:/src:ro" -v "$PWD/qualification-artefacts:/artefacts" fedora:45 bash -euo pipefail -c '
-            dnf -y -q install python3 git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
+            dnf -y -q install python3 python3-pyyaml python3-rpm git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
               dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd >/dev/null
             cp -a /src /w && cd /w
             dnf -y -q builddep packaging/fedora/mirivue-kde.spec >/dev/null
@@ -199,9 +200,10 @@ jobs:
         env:
           TEST_FS: ${{ matrix.filesystem }}
         run: |
+          set -euo pipefail
           docker run --rm --init -v "$PWD:/src:ro" -v "$RUNNER_TEMP/mirivue-montage:/fs:rw" \
             -e MIRIVUE_FILESYSTEM_TYPE="$TEST_FS" -e MIRIVUE_FILESYSTEM_ROOT=/fs fedora:45 bash -euo pipefail -c '
-            dnf -y -q --setopt=tsflags= install /src/dist/rpms/*.rpm >/dev/null
+            dnf -y -q --setopt=tsflags= install dbus-daemon /src/dist/rpms/*.rpm >/dev/null
             export PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=offscreen
             export PATH=/usr/lib64/mirivue-kde/tools:$PATH
             dbus-run-session -- timeout 180 python3 /src/packaging/qualifier_fichiers_stable.py
@@ -285,6 +287,7 @@ jobs:
         run: |
           # Ephemeral GitHub-hosted runner only: vgem is a GPU-less render node.
           sudo modprobe vgem
+          sudo udevadm settle --timeout=30
           node=$(ls /dev/dri/renderD* | head -n 1)
           echo "RENDER_NODE=$node" >> "$GITHUB_ENV"
           # Outside the workspace: actions/checkout cleans it.

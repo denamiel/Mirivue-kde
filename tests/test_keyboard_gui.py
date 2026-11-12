@@ -3,6 +3,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from PySide6.QtCore import QPoint, QSettings, Qt, QItemSelectionModel
@@ -36,8 +37,12 @@ class TestKeyboardGui(unittest.TestCase):
         # Offscreen QPA keeps a Python-created QMimeData in a process static.
         # Release test clipboard contents while the Python runtime is alive.
         self.app.clipboard().clear()
-        self.window.quit_requested = self.window.closing = True
-        self.window.close()
+        self.window.quit_requested = True
+        deadline = time.monotonic() + 10
+        while not self.window.close() and time.monotonic() < deadline:
+            self.app.processEvents()
+            QTest.qWait(20)
+        self.assertTrue(self.window.close(), 'window did not finish its asynchronous shutdown')
         self.drain()
         self.temporary.cleanup()
 

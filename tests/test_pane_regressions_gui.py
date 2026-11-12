@@ -155,7 +155,7 @@ class TestPaneRegressions(unittest.TestCase):
                     with patch.object(w, 'start_thumbnails',
                             side_effect=lambda force_paths=(): calls.append((w.bound_pane, force_paths))):
                         self.click_other_pane(other)
-                        self.wait_until(lambda: target.exists() and not w.pending_transfers())
+                        self.wait_until(lambda: target.exists() and not w.pending_transfers() and any(paths for _, paths in calls))
                     self.assertFalse(old.exists())
                     self.assertEqual(target.read_text(), origin.column_slot)
                     self.assertEqual(origin.model.rows[0].path, target)
