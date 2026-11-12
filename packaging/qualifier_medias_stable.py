@@ -72,22 +72,31 @@ try:
     assert painter.isActive()
     painter.drawText(100, 200, 'Mirivue stable qualification')
     painter.end()
+    # QPainter retains its paint device until the wrapper is destroyed.
+    del painter
     del writer
+    assert pdf_path.read_bytes().rstrip().endswith(b'%%EOF'), 'PDF fixture is not finalized'
     window.preview_dock.show()
+    failures = []
     for preview in (image_path, pdf_path):
-        window.media_image.clear_preview()
-        row = listed_media_entry(preview)
-        window._preview_playlist = [row]
-        window._preview_index = 0
-        window._preview_pending = row
-        window.start_media_preview()
-        wait_for(lambda: not window.media_image._image.isNull(), 'preview did not render: ' + preview.suffix)
-        if preview == image_path:
-            assert window.media_image._image.pixelColor(0, 0).name() == '#3a7db8'
-        else:
-            assert window._pdf_page_count == 1
-        wait_for(lambda: window._preview_worker is None and window._pdf_worker is None,
-                 'preview worker did not finish')
+        try:
+            window.media_image.clear_preview()
+            row = listed_media_entry(preview)
+            window._preview_playlist = [row]
+            window._preview_index = 0
+            window._preview_pending = row
+            window.start_media_preview()
+            wait_for(lambda: not window.media_image._image.isNull(), 'preview did not render: ' + preview.suffix)
+            if preview == image_path:
+                assert window.media_image._image.pixelColor(0, 0).name() == '#3a7db8'
+            else:
+                assert window._pdf_page_count == 1
+            wait_for(lambda: window._preview_worker is None and window._pdf_worker is None,
+                     'preview worker did not finish')
+            print('preview passed: ' + preview.suffix, flush=True)
+        except AssertionError as error:
+            failures.append(str(error))
+            print('preview failed: ' + str(error), flush=True)
 
     def active_stream():
         result = subprocess.run(['pactl', '-f', 'json', 'list', 'sink-inputs'],
@@ -118,6 +127,7 @@ try:
         assert player.error() == QMediaPlayer.NoError, player.errorString()
         results.append(media.suffix)
         window.stop_media_playback()
+    assert not failures, '; '.join(failures)
     # Ten minutes in the actual window; keep the event loop and backend alive.
     started = time.monotonic()
     rounds = 0
