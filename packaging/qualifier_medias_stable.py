@@ -35,7 +35,8 @@ try:
     subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10',
                     '-i', str(audio), '-t', '15', '-c:v', 'libvpx', '-c:a', 'libvorbis', str(video)], check=True)
     # Apply the same backend selection as the installed Fedora launcher.
-    if Path('/usr/lib64/qt6/plugins/multimedia/libgstreamermediaplugin.so').is_file():
+    if any(Path(prefix + '/qt6/plugins/multimedia/libgstreamermediaplugin.so').is_file()
+           for prefix in ('/usr/lib64', '/usr/lib')):
         os.environ['QT_MEDIA_BACKEND'] = 'gstreamer'
     from PySide6.QtCore import QSettings, QItemSelectionModel
     from PySide6.QtMultimedia import QMediaPlayer
