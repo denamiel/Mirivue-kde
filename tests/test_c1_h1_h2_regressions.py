@@ -726,7 +726,7 @@ class TestNativeHelpersRejectIncompleteUrls(IsolatedKioTestCase):
         self.assertEqual(state(source), 'KEEP')
 
 
-class TestRemovalCancellationKeepsService(IsolatedKioTestCase):
+class TestACancellationKeepsService(IsolatedKioTestCase):
     def cancel_confirmation(self, command):
         services.shutdown_kio_service()
         config = Path(os.environ['XDG_CONFIG_HOME']) / 'kiorc'
@@ -780,6 +780,7 @@ class TestDesktopDropsUseLocalSources(IsolatedKioTestCase):
         source, uri = self.desktop_file('photo ', 'KEEP-SPACE')
         other = write(source.with_name(source.name.rstrip()), 'OTHER')
         harness = Harness([], 'desktop:/')
+        harness.deadline = 3
         harness.drop_choices([uri], 'trash:/')
         self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
         self.assertFalse(source.exists())
@@ -791,6 +792,7 @@ class TestDesktopDropsUseLocalSources(IsolatedKioTestCase):
         link = target.with_name(target.name + '-link')
         link.symlink_to(target.name)
         harness = Harness([], 'desktop:/')
+        harness.deadline = 3
         harness.drop_choices([QUrl('desktop:/' + link.name).toString()], 'trash:/')
         self.assertTrue(harness.requests[-1]['ok'], harness.requests[-1])
         self.assertFalse(link.is_symlink())
@@ -800,6 +802,7 @@ class TestDesktopDropsUseLocalSources(IsolatedKioTestCase):
     def test_missing_desktop_source_does_not_partially_trash_selection(self):
         source, uri = self.desktop_file('present.txt', 'KEEP')
         harness = Harness([], 'desktop:/')
+        harness.deadline = 3
         harness.drop_choices([uri, uri + '-missing'], 'trash:/')
         self.assertFalse(harness.requests[-1]['ok'])
         self.assertEqual(source.read_text(), 'KEEP')
