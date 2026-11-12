@@ -160,6 +160,51 @@ jobs:
           retention-days: 14
 
 
+  medias-session:
+    name: Médias PipeWire et session de dix minutes (Fedora 45)
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    container:
+      image: fedora:45
+      options: --init
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm-kde-fedora-45
+          path: dist/rpms
+      - name: Lire les médias du paquet installé dans une session audio jetable
+        run: |
+          set -euo pipefail
+          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils
+          useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-media
+          validation_home=$(mktemp -d /tmp/mirivue-media-XXXXXX)
+          mkdir -m 700 "$validation_home/runtime"
+          chown -R mirivue-media:mirivue-media "$validation_home"
+          mkdir -p medias-artefacts
+          status=0
+          runuser -u mirivue-media -- env HOME="$validation_home" XDG_RUNTIME_DIR="$validation_home/runtime" \
+            XDG_CONFIG_HOME="$validation_home/config" XDG_DATA_HOME="$validation_home/data" \
+            XDG_CACHE_HOME="$validation_home/cache" XDG_STATE_HOME="$validation_home/state" \
+            PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=xcb \
+            dbus-run-session -- xvfb-run -a timeout 900 python3 "$PWD/packaging/qualifier_medias_stable.py" \
+            > medias-artefacts/resultat.log 2>&1 || status=$?
+          cp "$validation_home"/*.log medias-artefacts/ || true
+          cat medias-artefacts/resultat.log
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medias-pipewire-session
+          path: medias-artefacts/
+          if-no-files-found: error
+          retention-days: 14
+
   fichiers-images:
     name: Fichiers réels sur ${{ matrix.filesystem }}
     needs: rpm
