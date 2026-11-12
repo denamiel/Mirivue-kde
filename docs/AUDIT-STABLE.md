@@ -25,6 +25,23 @@ Audit du 12 novembre 2026, exclusivement via GitHub, sur main
 - [Comparaison Claude 43272225925](https://github.com/denamiel/Mirivue-kde/actions/runs/43272225925) :
   échec des deux voies invalid_request. Hors critères de sortie du produit.
 
+## Preuves complémentaires hors main
+
+La [PR #14](https://github.com/denamiel/Mirivue-kde/pull/14) contient déjà un
+prototype de VM Plasma. Le [run 43069359248](https://github.com/denamiel/Mirivue-kde/actions/runs/43069359248)
+réussit ses jobs KVM, RPM, pilote, contrôle négatif, trois démarrages et une
+opération clavier/souris. La documentation du commit de tête
+`2682b09620e49549752e92c320f4cf5e69978435` rapporte la création d'un dossier
+par Mirivue avec fichier témoin intact. C'est une preuve antérieure sur sa
+référence de fusion, pas une validation du main audité. Le prototype ne couvre
+pas encore copie, renommage et corbeille ; sa stabilité reste annoncée insuffisante.
+Réutiliser ce travail si nécessaire, sans construire un second banc ni exiger
+sa promotion en contrôle obligatoire.
+
+La branche COPR `publication` pointe sur
+`4e5d34f4078e35a3fb1573a5cb5d2882b20ab253` (préparation bêta 6).
+Cela identifie les sources proposées à COPR, pas la réussite d'une build publiée.
+
 ## Écarts démontrés et première correction
 
 1. `STABILISATION.md` désignait encore RC194 et des commandes sur le poste
