@@ -1,0 +1,83 @@
+name: Claude - comparaison minimale action et SDK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: mirivue-claude-comparaison
+  cancel-in-progress: false
+
+jobs:
+  comparaison:
+    if: github.repository == 'denamiel/Mirivue-kde' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Refuser les sorties de debogage publiques
+        env:
+          STEP_DEBUG: ${{ runner.debug }}
+        run: |
+          if [ "$STEP_DEBUG" = "1" ] || [ "${ACTIONS_STEP_DEBUG:-}" = "true" ] || [ -n "${DEBUG_CLAUDE_AGENT_SDK:-}" ]; then
+            echo "Comparaison refusee : debogage public actif"
+            exit 1
+          fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/claude-comparaison-privee"
+      - name: Recuperer la meme version de l'action pour les deux voies
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: anthropics/claude-code-action
+          ref: 4fa93a88de49bbef68b10eb15aabedf28ca0e1ed
+          path: .compare-action
+          persist-credentials: false
+      - name: Voie A - action GitHub minimale
+        id: action
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: ./.compare-action
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-comparaison-config
+        with:
+          github_token: ${{ github.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: 'false'
+          display_report: 'false'
+          classify_inline_comments: 'false'
+          prompt: Réponds exactement OK, sans outil ni lecture de fichier.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 1
+            --max-budget-usd 0.10
+            --tools Read
+            --allowedTools Read
+            --setting-sources user
+            --strict-mcp-config
+            --mcp-config '{"mcpServers":{}}'
+            --disable-slash-commands
+      - name: Voie B - SDK direct sans le lanceur de l'action
+        if: ${{ !cancelled() && steps.action.outcome != 'skipped' && steps.action.outcome != '' }}
+        continue-on-error: true
+        env:
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-comparaison-config
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          umask 077
+          timeout --kill-after=5s 120s bun packaging/claude_comparaison.mjs direct \
+            > "$RUNNER_TEMP/claude-comparaison-privee/launcher.stdout" \
+            2> "$RUNNER_TEMP/claude-comparaison-privee/launcher.stderr"
+      - name: Comparer les verdicts et supprimer les captures privees
+        if: ${{ always() }}
+        env:
+          ACTION_OUTCOME: ${{ steps.action.outcome }}
+        run: node packaging/claude_comparaison.mjs report
