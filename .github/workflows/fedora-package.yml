@@ -215,7 +215,7 @@ jobs:
       - name: Lire les médias du paquet installé dans une session audio jetable
         run: |
           set -euo pipefail
-          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils
+          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils gdb
           useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-media
           validation_home=$(mktemp -d /tmp/mirivue-media-XXXXXX)
           mkdir -m 700 "$validation_home/runtime"
@@ -225,8 +225,10 @@ jobs:
           runuser -u mirivue-media -- env HOME="$validation_home" XDG_RUNTIME_DIR="$validation_home/runtime" \
             XDG_CONFIG_HOME="$validation_home/config" XDG_DATA_HOME="$validation_home/data" \
             XDG_CACHE_HOME="$validation_home/cache" XDG_STATE_HOME="$validation_home/state" \
-            PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=xcb \
-            dbus-run-session -- xvfb-run -a timeout 900 python3 "$PWD/packaging/qualifier_medias_stable.py" \
+            PYTHONPATH=/usr/lib64/mirivue-kde QT_QPA_PLATFORM=xcb PYTHONFAULTHANDLER=1 \
+            dbus-run-session -- xvfb-run -a timeout 900 gdb -q -batch --return-child-result \
+            -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
+            --args python3 "$PWD/packaging/qualifier_medias_stable.py" \
             > medias-artefacts/resultat.log 2>&1 || status=$?
           cp "$validation_home"/*.log medias-artefacts/ || true
           cat medias-artefacts/resultat.log
