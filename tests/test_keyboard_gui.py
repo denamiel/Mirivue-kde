@@ -26,6 +26,8 @@ class TestKeyboardGui(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.settings = QSettings(str(self.root/'settings.ini'), QSettings.IniFormat)
         self.settings.setValue('media/start-preview-panel', False)
+        # This suite opens tabs but does not test the modal close decision.
+        self.settings.setValue('window/confirm-close-multiple-tabs', False)
         with patch('mirivue.app.mirivue_settings', return_value=self.settings):
             self.window = Window()
         self.window.show()
