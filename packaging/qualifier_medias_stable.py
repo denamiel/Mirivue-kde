@@ -118,8 +118,22 @@ try:
     def active_stream():
         result = subprocess.run(['pactl', '-f', 'json', 'list', 'sink-inputs'],
                                 capture_output=True, text=True, check=True)
-        return any(str(s.get('properties', {}).get('application.process.id')) == str(os.getpid())
-                   and not s.get('corked', True) for s in json.loads(result.stdout))
+        clients_result = subprocess.run(['pactl', '-f', 'json', 'list', 'clients'],
+                                        capture_output=True, text=True, check=True)
+        clients = {str(c['index']): c.get('properties', {})
+                   for c in json.loads(clients_result.stdout)}
+        for stream in json.loads(result.stdout):
+            properties = stream.get('properties', {})
+            # Native PipeWire streams keep the process identity on their client.
+            # Pulse clients may also repeat it directly on the stream.
+            client = clients.get(str(stream.get('client')), {})
+            pid = properties.get('application.process.id', client.get('application.process.id'))
+            if (str(pid) == str(os.getpid()) and stream.get('corked') is False
+                    and stream.get('mute') is False):
+                print('audio stream: ' + json.dumps(dict(pid=pid, client=stream.get('client'),
+                      sink=stream.get('sink'), corked=False, mute=False)), flush=True)
+                return True
+        return False
 
     results = []
     for media in (audio, video):
