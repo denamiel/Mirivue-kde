@@ -284,7 +284,7 @@ jobs:
       - name: Lire les médias du paquet installé dans une session audio jetable
         run: |
           set -euo pipefail
-          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils gdb
+          dnf -y -q --setopt=tsflags= install dist/rpms/*.rpm pipewire pipewire-utils pipewire-pulseaudio wireplumber pulseaudio-utils dbus-daemon xorg-x11-server-Xvfb xorg-x11-xauth shadow-utils gdb
           useradd --system --no-create-home --home-dir /nonexistent --shell /sbin/nologin mirivue-media
           validation_home=$(mktemp -d /tmp/mirivue-media-XXXXXX)
           mkdir -m 700 "$validation_home/runtime"
@@ -299,7 +299,7 @@ jobs:
             -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
             --args python3 "$PWD/packaging/qualifier_medias_stable.py" \
             > medias-artefacts/resultat.log 2>&1 || status=$?
-          cp "$validation_home"/*.log medias-artefacts/ || true
+          cp "$validation_home"/*.log "$validation_home"/*.json medias-artefacts/ || true
           cat medias-artefacts/resultat.log
           exit "$status"
       - uses: actions/upload-artifact@v4

@@ -12,6 +12,10 @@ import wave
 assert os.geteuid() != 0, 'run as the disposable test account'
 root = Path(os.environ['HOME'])
 assert root.name.startswith('mirivue-media-'), 'dedicated temporary HOME required'
+pulse_dir = Path(os.environ['XDG_RUNTIME_DIR']) / 'pulse'
+pulse_dir.mkdir(mode=0o700, exist_ok=True)
+pulse_socket = pulse_dir / 'native'
+os.environ['PULSE_SERVER'] = 'unix:' + str(pulse_socket)
 processes = []
 logs = []
 try:
@@ -20,6 +24,10 @@ try:
         logs.append(log)
         processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT))
     deadline = time.monotonic() + 20
+    while not pulse_socket.is_socket():
+        assert all(p.poll() is None for p in processes), 'an audio daemon exited during startup'
+        assert time.monotonic() < deadline, 'PipeWire Pulse socket did not appear'
+        time.sleep(.1)
     while subprocess.run(['pactl', 'info'], capture_output=True).returncode:
         assert time.monotonic() < deadline, 'PipeWire Pulse server did not start'
         time.sleep(.1)
@@ -57,7 +65,7 @@ try:
         until = time.monotonic() + timeout
         while not predicate() and time.monotonic() < until:
             app.processEvents()
-            QTest.qWait(20)
+            QTest.qWait(100)
         assert predicate(), message
 
     # Exercise the application's actual asynchronous image and PDF previews.
@@ -156,6 +164,13 @@ try:
                           pause_resume=True, video_unmute=True, formats=results,
                           session_seconds=round(time.monotonic() - started), rounds=rounds)), flush=True)
 finally:
+    for command, name in ((['pactl', '-f', 'json', 'list', 'sink-inputs'], 'sink-inputs.json'),
+                          (['pw-dump'], 'pipewire-state.json')):
+        try:
+            state = subprocess.run(command, capture_output=True, text=True, timeout=5)
+            (root / name).write_text(state.stdout + '\n' + state.stderr)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            (root / name).write_text(str(error))
     for process in reversed(processes):
         process.terminate()
     for process in processes:

@@ -84,7 +84,7 @@ jobs:
             -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
             --args python3 "$PWD/packaging/qualifier_medias_stable.py" \
             > medias-artefacts/resultat.log 2>&1 || status=$?
-          cp "$validation_home"/*.log medias-artefacts/ || true
+          cp "$validation_home"/*.log "$validation_home"/*.json medias-artefacts/ || true
           cat medias-artefacts/resultat.log
           exit "$status"
       - uses: actions/upload-artifact@v4
