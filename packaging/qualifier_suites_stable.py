@@ -58,6 +58,10 @@ for suite in suites:
                    tests=int(runs[-1]) if runs else 0,
                    skipped=int(skips[-1]) if skips else text.count(" ... skipped "),
                    duration=round(time.monotonic() - started, 3))
+        if code != 0 or row["tests"] == 0:
+            print(text[-10000:], flush=True)
+        elif row["skipped"]:
+            print("\\n".join(line for line in text.splitlines() if " ... skipped " in line), flush=True)
         rows.append(row)
         print(json.dumps(row), flush=True)
         (OUT / "rapport.json").write_text(json.dumps(dict(suites=rows), indent=2))
