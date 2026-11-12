@@ -1,0 +1,24 @@
+name: Diagnostic Claude - tests du filtre sans secret
+
+on:
+  pull_request:
+    paths:
+      - 'packaging/diagnostic_claude_sdk.py'
+      - 'tests/test_diagnostic_claude_sdk.py'
+      - '.github/workflows/diagnostic-claude-tests.yml'
+      - '.github/workflows/claude-heberge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  filtre:
+    name: Diagnostic Claude - non-divulgation sur donnees synthetiques
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verifier le filtre et la suppression des fichiers prives
+        run: python3 -m unittest discover -s tests -p test_diagnostic_claude_sdk.py -v
