@@ -81,6 +81,40 @@ jobs:
         run: |
           export PYTHONPATH="$PWD:$PWD/tests"
           xvfb-run -a dbus-run-session -- timeout 90 python3 -m unittest discover -s tests -p test_c1_h1_h2_regressions.py -k TestACancellationKeepsService -v
+      - name: Mise à jour et retour arrière depuis le RPM bêta 5 publié
+        if: matrix.fedora == '45'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          validation_dir=$(mktemp -d /tmp/mirivue-rpm-cycle-XXXXXX)
+          export HOME="$validation_dir/home" XDG_CONFIG_HOME="$validation_dir/config"
+          export XDG_DATA_HOME="$validation_dir/data" XDG_STATE_HOME="$validation_dir/state" XDG_CACHE_HOME="$validation_dir/cache"
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME/pdenams" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
+          printf '[General]\nstable-audit=preserver\n' > "$XDG_CONFIG_HOME/pdenams/Mirivue.conf"
+          printf 'données utilisateur de test\n' > "$HOME/temoin.txt"
+          sha256sum "$HOME/temoin.txt" > "$validation_dir/temoin.sha256"
+          python3 - "$validation_dir/baseline.rpm" <<'PYTHON'
+          import hashlib, pathlib, sys, urllib.request
+          url = 'https://download.copr.fedorainfracloud.org/results/pdenams/Mirivue-kde/fedora-45-x86_64/Packages/m/mirivue-kde-1.0.0-0.200.beta5.3.fc45.x86_64.rpm'
+          data = urllib.request.urlopen(url, timeout=60).read()
+          assert hashlib.sha256(data).hexdigest() == 'c642fdb6311f9b46e0360c60a6e873aefacd076e55ec562f6b7b362057c375cb'
+          pathlib.Path(sys.argv[1]).write_bytes(data)
+          PYTHON
+          candidate=$(find "$PWD/dist/rpms/x86_64" -name 'mirivue-kde-[0-9]*.rpm' -print)
+          test -f "$candidate"
+          for phase in baseline candidate rollback reinstall; do
+            case "$phase" in
+              baseline|rollback) dnf -y downgrade "$validation_dir/baseline.rpm"; expected=0.200.beta5.3.fc45 ;;
+              candidate|reinstall) dnf -y upgrade "$candidate"; expected=$(rpm -qp --qf '%{RELEASE}' "$candidate") ;;
+            esac
+            test "$(rpm -q --qf '%{RELEASE}' mirivue-kde)" = "$expected"
+            mirivue-kde --version
+            dbus-run-session -- timeout 45 mirivue-kde --smoke-test
+            sha256sum -c "$validation_dir/temoin.sha256"
+            grep -q '^stable-audit=preserver$' "$XDG_CONFIG_HOME/pdenams/Mirivue.conf"
+            echo "cycle-rpm: $phase réussi ($expected)"
+          done
       - name: Signaler une incompatibilité de développement
         if: failure() && matrix.experimental
         run: echo 'Rawhide a échoué. Examiner les dépendances et les tests avant la prochaine migration ; aucun paquet Rawhide n’est publié.' >> "$GITHUB_STEP_SUMMARY"

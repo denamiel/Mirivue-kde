@@ -59,6 +59,36 @@ try:
             QTest.qWait(20)
         assert predicate(), message
 
+    # Exercise the application's actual asynchronous image and PDF previews.
+    from PySide6.QtGui import QImage, QColor, QPainter, QPdfWriter
+    wait_for(lambda: not window.scanning, 'initial directory scan did not finish')
+    image_path = root / 'preview.png'
+    image = QImage(320, 180, QImage.Format_RGB32)
+    image.fill(QColor('#3a7db8'))
+    assert image.save(str(image_path))
+    pdf_path = root / 'preview.pdf'
+    writer = QPdfWriter(str(pdf_path))
+    painter = QPainter(writer)
+    assert painter.isActive()
+    painter.drawText(100, 200, 'Mirivue stable qualification')
+    painter.end()
+    del writer
+    window.preview_dock.show()
+    for preview in (image_path, pdf_path):
+        window.media_image.clear_preview()
+        row = basic_entry(preview)
+        window._preview_playlist = [row]
+        window._preview_index = 0
+        window._preview_pending = row
+        window.start_media_preview()
+        wait_for(lambda: not window.media_image._image.isNull(), 'preview did not render: ' + preview.suffix)
+        if preview == image_path:
+            assert window.media_image._image.pixelColor(0, 0).name() == '#3a7db8'
+        else:
+            assert window._pdf_page_count == 1
+        wait_for(lambda: window._preview_worker is None and window._pdf_worker is None,
+                 'preview worker did not finish')
+
     def active_stream():
         result = subprocess.run(['pactl', '-f', 'json', 'list', 'sink-inputs'],
                                 capture_output=True, text=True, check=True)
@@ -103,7 +133,7 @@ try:
         rounds += 1
     window.quit_requested = True
     wait_for(window.close, 'window shutdown did not complete')
-    print(json.dumps(dict(audio=True, video_frame=True, pipewire_stream=True,
+    print(json.dumps(dict(audio=True, video_frame=True, image_preview=True, pdf_preview=True, pipewire_stream=True,
                           pause_resume=True, video_unmute=True, formats=results,
                           session_seconds=round(time.monotonic() - started), rounds=rounds)), flush=True)
 finally:

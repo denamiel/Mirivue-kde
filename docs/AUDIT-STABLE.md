@@ -32,6 +32,30 @@ Audit du 12 novembre 2026, exclusivement via GitHub, sur main
   Ils ne constituent pas encore une preuve de mise à jour vers une version 1.0
   ni une validation de mise à jour Fedora.
 
+Résultats complémentaires sur `b139a49`,
+[run 43287981473](https://github.com/denamiel/Mirivue-kde/actions/runs/43287981473) :
+RPM Fedora 44/45/Rawhide, Python et TestLab X11/Wayland réussis. Les journaux
+ext4 et NTFS3 confirment copie/déplacement avec empreintes, conflit annulé,
+Corbeille/restauration, espace final exact et cible de lien préservée.
+Les premiers faux verts des images (commande absente masquée par `tee`) ne
+sont pas comptés ; dépendance et propagation d'erreur sont corrigées et testées.
+Le contrôle des permissions Wayland reste exigé, après attente d'udev.
+Le cycle Arch bêta 5 → candidat → retour arrière → candidat est réussi.
+La suite intégrale est encore en cours à ce relevé, sans résultat anticipé.
+
+Le passage intégral précédent `aca14bc` avait quatre suites en échec : deux
+imports sans PyYAML, renommages GUI insuffisamment attendus et scan de dossier
+absent après renommage KIO, puis arrêt anormal de la suite clavier après ses
+16 assertions réussies. Le scan est rétabli ; les fenêtres de test attendent
+leur fermeture effective et les vignettes asynchrones restent exigées.
+
+Les contrôles médias ajoutés lancent le RPM installé, PipeWire/Pulse et une
+sortie virtuelle sous un utilisateur jetable : audio, image vidéo décodée,
+pause/reprise, réactivation du son vidéo et session de dix minutes. Les aperçus
+image/PDF et le cycle RPM depuis la bêta 5 épinglée complètent cette campagne.
+Ces nouveaux contrôles restent à lire dans leurs propres journaux ; ils ne
+prouvent ni écoute sur matériel physique ni bureau Plasma complet.
+
 Les nouveaux noms de jobs sont classés informatifs dans le vérificateur. Les
 six contrôles requis et le ruleset effectif ne sont pas modifiés. Aucun appel
 d'application des protections n'est effectué.
