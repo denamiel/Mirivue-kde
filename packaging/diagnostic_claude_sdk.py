@@ -10,16 +10,108 @@ FIELDS = ("result", "errors", "api_error_status", "api_error",
           "terminal_reason", "stop_reason", "permission_denials")
 RULES = {
     "authentification": ("unauthorized", "authentication_error", "invalid api key",
-                         "token expired", "not logged in", "invalid oauth"),
+                         "token expired", "not logged in", "invalid oauth",
+                         "invalid bearer token", "invalid authentication credentials",
+                         "missing authentication", "login required"),
     "limitation": ("rate_limit", "rate limit", "usage limit", "session limit", "weekly limit"),
     "facturation": ("credit balance", "payment required", "billing_error"),
     "modele": ("model not found", "invalid model", "model_not_found"),
     "reseau": ("econnrefused", "enotfound", "etimedout", "connection error",
-               "fetch failed", "tls", "certificate"),
+               "fetch failed", "tls handshake failed", "certificate verify failed",
+               "unable to verify the first certificate"),
     "service": ("overloaded_error", "internal_server_error"),
     "configuration": ("invalid settings", "failed to parse", "invalid configuration"),
     "hook": ("hook failed", "hook error", "hook timed out"),
 }
+
+
+# Les noms ci-dessous sont des etiquettes fixes, jamais des URL imprimees.
+HTTP_PATTERN = re.compile(
+    r"(?i)\b(?:http(?:/\d(?:\.\d)?)?|status(?:[_ ]code)?)\s*[:=]?\s*([1-5]\d{2})\b")
+URL_PATTERN = re.compile(r"https?://[^\s<>\"'\\]+", re.IGNORECASE)
+ERROR_ENUMS = (
+    "authentication_failed", "authentication_error", "billing_error",
+    "rate_limit", "invalid_request", "server_error", "unknown",
+    "api_error", "error_during_execution", "error", "stop_sequence",
+)
+
+
+def services(line):
+    """Classer seulement les URL de domaines exacts ; ignorer queries et identifiants."""
+    from urllib.parse import urlsplit
+    labels = set()
+    for raw in URL_PATTERN.findall(line):
+        try:
+            url = urlsplit(raw)
+            host = url.hostname
+            # Pas de confiance dans un hote cache derriere userinfo ou port atypique.
+            if url.username is not None or url.password is not None:
+                labels.add("url_non_reconnue")
+                continue
+            if url.port not in (None, 443):
+                labels.add("url_non_reconnue")
+                continue
+            if host == "api.anthropic.com":
+                if url.path.rstrip("/") == "/v1/messages":
+                    labels.add("anthropic_messages")
+                elif url.path.rstrip("/") in ("/v1/oauth/token", "/api/oauth/token"):
+                    labels.add("anthropic_oauth_token")
+                else:
+                    labels.add("anthropic_api_autre")
+            elif host == "claude.ai":
+                if url.path.rstrip("/") in ("/v1/oauth/token", "/api/oauth/token"):
+                    labels.add("claude_oauth_token")
+                else:
+                    labels.add("claude_web_autre")
+            elif host == "api.github.com":
+                labels.add("github_api")
+            elif host in ("statsig.anthropic.com", "statsig.com",
+                          "sentry.io", "o4507804796354560.ingest.us.sentry.io"):
+                labels.add("telemetrie")
+            else:
+                labels.add("url_non_reconnue")
+        except ValueError:
+            labels.add("url_non_reconnue")
+    return labels
+
+
+def http_sources(text, prefix):
+    """Une proximite de lignes ne prouve pas la provenance d'une reponse."""
+    lines = []
+    records = text.splitlines()
+    occurrences = 0
+    for i, record in enumerate(records):
+        if "401" not in HTTP_PATTERN.findall(record):
+            continue
+        occurrences += 1
+        if occurrences > 20:
+            lines.append(prefix + " 401 : occurrences_tronquees")
+            break
+        window = "\n".join(records[max(0, i - 2):i + 3]).lower()
+        for marker, patterns in (
+            ("oauth", ("oauth",)),
+            ("github", ("github",)),
+            ("telemetrie", ("statsig", "telemetry", "sentry")),
+            ("requete_modele", ("api:request", "api:response", "api:error", "/v1/messages")),
+        ):
+            if any(pattern in window for pattern in patterns):
+                lines.append(prefix + " 401 marqueur_voisinage : " + marker)
+        direct = services(record)
+        if direct:
+            labels = direct
+            relation = "meme_ligne"
+        else:
+            labels = set()
+            for neighbour in records[max(0, i - 2):i] + records[i + 1:i + 3]:
+                labels.update(services(neighbour))
+            relation = "voisinage_non_attribue" if labels else "source_absente"
+        if len(labels) > 1:
+            lines.append(prefix + " 401 : contexte_ambigu")
+        if not labels:
+            lines.append(prefix + " 401 : source_absente")
+        for label in sorted(labels):
+            lines.append(prefix + " 401 contexte " + relation + " : " + label)
+    return list(dict.fromkeys(lines))
 
 
 def bounded_text(path):
@@ -86,6 +178,10 @@ def report(execution, debug):
         for field in FIELDS:
             lines.append("SDK resultat " + field + " : " +
                          shape(message.get(field), field in message))
+        for field in ("api_error", "terminal_reason", "stop_reason"):
+            value = message.get(field)
+            if isinstance(value, str) and value in ERROR_ENUMS:
+                lines.append("SDK code ferme " + field + " : " + value)
         status = message.get("api_error_status")
         if type(status) is int and 100 <= status <= 599:
             lines.append("SDK HTTP : " + str(status))
@@ -99,7 +195,9 @@ def report(execution, debug):
         value = message.get("error")
         if isinstance(value, str):
             texts.append(value)
-    for label in categories("\n".join(texts)):
+    sdk_text = "\n".join(texts)
+    lines.extend(http_sources(sdk_text, "SDK"))
+    for label in categories(sdk_text):
         lines.append("SDK indice : " + label)
 
     text, state = bounded_text(debug)
@@ -109,11 +207,10 @@ def report(execution, debug):
         for label in labels:
             lines.append("Journal indice : " + label)
         # Codes uniquement lies a un libelle de statut ; jamais de texte libre.
-        codes = sorted({int(m) for m in re.findall(
-            r"(?i)\b(?:http(?:/\d(?:\.\d)?)?|status(?:[_ ]code)?)\s*[:=]?\s*([1-5]\d{2})\b",
-            text)})
+        codes = sorted({int(m) for m in HTTP_PATTERN.findall(text)})
         for status in codes:
             lines.append("Journal HTTP possible : " + str(status))
+        lines.extend(http_sources(text, "Journal"))
         if not labels and not codes:
             lines.append("Journal indice : aucun_reconnu")
     lines.append("Diagnostic : indices seulement ; aucune cause deduite de leur absence")
