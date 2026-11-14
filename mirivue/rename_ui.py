@@ -36,7 +36,7 @@ def show_advanced_rename(self, rows, folder=None, initial_method='manual'):
     rules.addItem(tr('Ajouter du texte à la fin'), tr('suffix'))
     rules.addItem(tr('Rechercher et remplacer'), tr('replace'))
     rules.addItem(tr('Numéroter'), tr('number'))
-    rules.addItem(tr('Mettre une majuscule au début de chaque mot'), tr('title'))
+    rules.addItem(tr('Majuscule au début des mots'), tr('title'))
     rule_form = QFormLayout()
     rule_form.addRow(tr('Méthode :'), rules)
     rules.setCurrentIndex(max(0, rules.findData(initial_method)))

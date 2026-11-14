@@ -1,8 +1,9 @@
 # Mirivue KDE
 
 Gestionnaire de fichiers multimédia à deux panneaux pour KDE Plasma.
-Version préparée : **1.0.0**, candidate à la publication.
-Les dépôts publics distribuent encore la version précédemment publiée.
+Version corrective préparée : **1.0.1**.
+Le renommage multiple « Majuscule au début des mots » normalise aussi les mots en capitales.
+La disponibilité des paquets dépend des publications réussies dans les dépôts ci-dessous.
 
 La portée des contrôles et leurs limites sont décrites dans [la qualification de la version 1.0](docs/VALIDATION-1.0.md).
 

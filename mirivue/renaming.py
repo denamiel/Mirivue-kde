@@ -45,7 +45,7 @@ def batch_names(rows, mode, first='', second='', start=1, digits=3):
         elif mode == tr('number'):
             candidate = str(first).strip() + tr(' ') + str(int(start) + offset).zfill(int(digits)) if str(first).strip() else stem
         elif mode == tr('title'):
-            candidate = re.sub(r'(^|[\s_-]+)([^\W\d_])', lambda match: match.group(1) + match.group(2).upper(), stem, flags=re.UNICODE)
+            candidate = re.sub(r'(^|[\s_-]+)([^\W\d_])', lambda match: match.group(1) + match.group(2).upper(), stem.lower(), flags=re.UNICODE)
         elif mode == 'metadata':
             from .media import FIELDS
             tags = getattr(row, 'media_tags', {})

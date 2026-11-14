@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Mirivue contributors
 # SPDX-License-Identifier: MIT
 Name: mirivue-kde
-Version: 1.0.0
+Version: 1.0.1
 Release: 1%{?dist}
 Summary: Gestionnaire de fichiers multimedia pour KDE Plasma
 License: GPL-3.0-or-later AND GPL-2.0-or-later AND MIT AND BSD-2-Clause AND CC0-1.0
-Source0: Mirivue-1.0.0-KDE.tar.gz
+Source0: Mirivue-1.0.1-KDE.tar.gz
 Source1: valider-appstream.py
 Source2: LICENSE-KIT.txt
 ExclusiveArch: x86_64 aarch64
@@ -34,10 +34,10 @@ Recommends: konsole
 %global __brp_python_bytecompile %{nil}
 
 %description
-Mirivue KDE 1.0.0 avec assistants KIO et moteur de vue natif compiles.
+Mirivue KDE 1.0.1 avec assistants KIO et moteur de vue natif compiles.
 
 %prep
-%setup -q -n Mirivue-1.0.0-KDE
+%setup -q -n Mirivue-1.0.1-KDE
 # Le lanceur doit aussi trouver GStreamer dans le repertoire lib64 de Fedora.
 sed -i 's|/usr/lib/qt6/plugins/multimedia/libgstreamermediaplugin.so|%{_libdir}/qt6/plugins/multimedia/libgstreamermediaplugin.so|' Lancer.sh
 
@@ -120,6 +120,9 @@ done
 %{_datadir}/swcatalog/xml/mirivue-local.xml
 
 %changelog
+* Sat Nov 14 2026 Mirivue contributors - 1.0.1-1
+- Normalize bulk rename word capitalization and clarify its label.
+
 * Sun Nov 08 2026 Mirivue contributors - 1.0.0-0.201.beta6.1
 - KIO acts on exactly the selected item: names ending with spaces, symlinks, remote deletion.
 - Move to Trash only for items with a local path; dangling symlinks are listed.
