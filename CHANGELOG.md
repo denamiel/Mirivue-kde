@@ -1,3 +1,8 @@
+# 1.0.1 — 14 novembre 2026
+
+- Renommage multiple F2 : « Majuscule au début des mots » convertit aussi les mots déjà en capitales ; `ma VIDEO de paris.mp4` devient `Ma Video De Paris.mp4`. Les séparateurs et l’extension sont conservés.
+- Libellé raccourci en « Majuscule au début des mots ».
+
 # 1.0.0 — 12 novembre 2026 — préparation stable
 
 - Fonctions gelées : aucune nouvelle fonctionnalité.

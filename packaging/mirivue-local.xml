@@ -26,7 +26,7 @@
     </categories>
     <content_rating type="oars-1.1" />
     <url type="homepage">https://github.com/denamiel/Mirivue-kde</url>
-  <releases>
+  <releases><release version="1.0.1" date="2026-11-14" type="stable"><description><p>Bulk rename word capitalization now normalizes existing uppercase words while preserving file extensions. The method label is clearer.</p></description></release>
       <release version="1.0.0" date="2026-11-12" type="stable">
         <description>
           <p>Stable release: exact KIO file operations, cancellable KDE confirmations with undo history preserved, folder rename refresh and complete multimedia runtime dependencies.</p>
