@@ -110,7 +110,7 @@ class ExternalLocationsMixin:
                 force_tabs=bool(payload.get('force_tabs')), across_windows=False, external_policy=True)
 
     def open_external_locations(self, requests, *, properties=False, activate_first=True,
-                                split=False, activation_token='', force_tabs=False, across_windows=True, external_policy=None):
+                                split=False, activation_token='', force_tabs=False, across_windows=True, external_policy=None, startup=False):
         requests = list(requests)
         external_policy = activate_first if external_policy is None else external_policy
         from PySide6.QtDBus import QDBusConnection
@@ -159,7 +159,7 @@ class ExternalLocationsMixin:
             for offset in range(0, len(missing), 2):
                 first = missing[offset]
                 self.open_new_tab(first.folder, active=True, external_files=first.files,
-                                  external_properties=properties)
+                                  external_properties=properties, startup=startup)
                 tab = self._tabs[self._active_tab]
                 if first_tab is None:
                     first_tab = tab
@@ -170,7 +170,11 @@ class ExternalLocationsMixin:
                     pane.external_request_pending = True
                     pane.pending_external_files = [Path(path) for path in second.files]
                     pane.pending_external_properties = bool(properties)
-                    self.run_in_pane(pane, self.navigate, second.folder)
+                    if startup:
+                        self.prime_startup_pane(pane, second.folder)
+                        self.run_in_pane(pane, self.scan)
+                    else:
+                        self.run_in_pane(pane, self.navigate, second.folder)
             target = first_tab if not activated else previous
             self.tab_bar.setCurrentIndex(next(i for i,t in enumerate(self._tabs) if t is target))
             if not activated:
@@ -181,6 +185,6 @@ class ExternalLocationsMixin:
             if not activated:
                 self.restore_window(activation_token) if activation_token else self.restore_window()
             pane = self.open_new_tab(request.folder, active=not activated, external_files=request.files,
-                              external_properties=properties, insert_index=insertion_index)
+                              external_properties=properties, insert_index=insertion_index, startup=startup)
             insertion_index = next(i for i,t in enumerate(self._tabs) if t.bound is pane) + 1
             activated = True

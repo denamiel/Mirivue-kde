@@ -292,7 +292,7 @@ class PaneMixin:
     def tab_title(self, location):
         return self.location_identity(location)[0]
 
-    def open_new_tab(self, location=None, active=True, external_files=None, external_properties=False, append=None, insert_index=None):
+    def open_new_tab(self, location=None, active=True, external_files=None, external_properties=False, append=None, insert_index=None, startup=False):
         if isinstance(location, bool):  # QAction.triggered(bool)
             location = None
         if append is None:
@@ -327,6 +327,11 @@ class PaneMixin:
         self.refresh_tab_title(index)
         self.tab_bar.setTabToolTip(index, str(location))
         self.apply_tab_bar_settings()
+        if startup:
+            # Prime lazy initial tabs too: their first activation must not
+            # restore a saved hidden-items preference over the startup choice.
+            self.prime_startup_pane(pane, str(location))
+            pane._session_listing_pending = True
         if active:
             self.tab_bar.setCurrentIndex(index)
         return pane

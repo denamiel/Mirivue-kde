@@ -88,7 +88,8 @@ class ViewPolicyMixin:
         else:
             self.settings.setValue('sorting/common-sort', [column, int(order.value)])
 
-    def restore_folder_view(self, destination):
+    def restore_folder_view(self, destination, *, startup=False):
+        """Restore saved styles, with a temporary visibility override at startup."""
         pane = getattr(self, 'bound_pane', None)
         if pane is None:
             return
@@ -153,7 +154,8 @@ class ViewPolicyMixin:
             allowed = {1, 2, 3, 4, 14, 19, 20}
             pane.extra_columns = tuple(column for column in raw_columns if type(column) is int and column in allowed) if isinstance(raw_columns, (list, tuple)) else ()
             self.update_pane_extra_information(pane)
-            hidden = bool(style.get('hidden', self.settings.value('view/hidden', False, type=bool)))
+            hidden = (False if startup and self.settings.value('view/hide-hidden-on-startup', False, type=bool)
+                      else bool(style.get('hidden', self.settings.value('view/hidden', False, type=bool))))
             previews = bool(style.get('previews', self.settings.value('view/previews', False, type=bool)))
             pane.hidden_state = hidden
             self.hidden.blockSignals(True)

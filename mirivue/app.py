@@ -2565,16 +2565,7 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
     def prime_startup_pane(self, pane, folder):
         """Install a pane location without starting I/O or changing layout."""
         def prime():
-            self.restore_folder_view(folder)
-            if self.settings.value('view/hide-hidden-on-startup', False, type=bool):
-                pane.hidden_state = False
-                self.hidden.blockSignals(True)
-                self.hidden.setChecked(False)
-                self.hidden.blockSignals(False)
-                self.hidden_action.blockSignals(True)
-                self.hidden_action.setChecked(False)
-                self.hidden_action.blockSignals(False)
-                self.apply_hidden_filter()
+            self.restore_folder_view(folder, startup=True)
             self.folder = folder
             self.history = [folder]
             self.history_position = 0
@@ -5866,11 +5857,11 @@ def main():
             pane.external_request_pending = True
             pane.pending_external_files = [Path(path) for path in requests[1].files]
             pane.pending_external_properties = '--show-properties' in sys.argv[1:]
-            window.run_in_pane(pane, window.navigate, requests[1].folder)
+            window.prime_startup_pane(pane, requests[1].folder)
         if len(requests) > 2:
-            QTimer.singleShot(0, lambda: window.open_external_locations(requests[2:], activate_first=False, split=True))
+            QTimer.singleShot(0, lambda: window.open_external_locations(requests[2:], activate_first=False, split=True, startup=True))
     elif len(requests) > 1:
-        QTimer.singleShot(0, lambda: window.open_external_locations(requests[1:], activate_first=False))
+        QTimer.singleShot(0, lambda: window.open_external_locations(requests[1:], activate_first=False, startup=True))
     if previous_unclean:
         QTimer.singleShot(350, window.show_previous_unclean_shutdown)
     else:
