@@ -1,8 +1,8 @@
 # Critères de publication de Mirivue KDE 1.0
 
 Base auditée : **1.0.0-beta.6**, main `faa828e0929dd91d3fe439a05b25048e7ebbe38b`.
-Version stable précédente : **1.0.0**, publiée.
-Candidat correctif préparé : **1.0.1**, renommage multiple et libellé corrigés.
+Version stable précédente : **1.0.1**, publiée.
+Candidat correctif préparé : **1.0.2**, masquage des éléments cachés au démarrage corrigé.
 La publication suit les contrôles GitHub et le circuit protégé existant.
 Bilan daté et preuves : [audit stable](docs/AUDIT-STABLE.md) et [qualification 1.0](docs/VALIDATION-1.0.md).
 
