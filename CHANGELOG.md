@@ -1,3 +1,8 @@
+# 1.0.2 — 16 novembre 2026
+
+- Le choix « Toujours masquer les éléments cachés au démarrage » s’applique à tous les volets et onglets initiaux, y compris lors d’un lancement avec plusieurs dossiers ou de la restauration d’une session.
+- La réactivation d’une fenêtre déjà ouverte conserve son affichage. Ctrl+H reste utilisable après le démarrage et les préférences mémorisées ne sont pas effacées.
+
 # 1.0.1 — 14 novembre 2026
 
 - Renommage multiple F2 : « Majuscule au début des mots » convertit aussi les mots déjà en capitales ; `ma VIDEO de paris.mp4` devient `Ma Video De Paris.mp4`. Les séparateurs et l’extension sont conservés.
