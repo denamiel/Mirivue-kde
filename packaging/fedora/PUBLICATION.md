@@ -2,7 +2,7 @@
 
 ## Références de version
 
-Version préparée : **1.0.2**, non publiée par cette préparation. Dans la recette :
+Version préparée : **1.0.2**, publiée. Dans la recette :
 `Version: 1.0.2` et `Release: 1%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
 Historiquement, la révision 3 a ajouté les guides corrigés sous `/usr/share/doc/mirivue-kde/`
@@ -44,40 +44,13 @@ Le webhook et son activation sont des réglages externes : ce document ne
 constitue pas une vérification de leur état. Les contrôler dans COPR et GitHub ;
 ne jamais enregistrer l'URL secrète du webhook dans Git ou dans une conversation.
 
-## Publier après validation
+## Publication automatique après validation
 
-1. Valider le commit candidat et vérifier la cohérence des versions, sources,
-   licences et dépendances.
-2. Aucune publication n'est automatique. Le mainteneur lance le workflow
-   « RPM Fedora et documentation installée » sur `main` en tapant `PUBLIER`,
-   puis approuve l'environnement protégé `publication-copr`. Après réussite des
-   contrôles Python et Fedora, le job avance `publication` ; il refuse si la
-   révision RPM n'a pas augmenté. Procédure : `docs/PUBLICATION-CONTROLEE.md`.
-3. Vérifier que COPR construit ce commit ; si le webhook est actif, contrôler
-   son résultat plutôt que supposer qu'un push a réussi à publier.
-4. Attendre la réussite dans chaque environnement Fedora annoncé.
-5. Contrôler l'installation ou la mise à jour du RPM et le lancement de Mirivue.
+La fusion d’une nouvelle version sur `main` déclenche la validation complète.
+Une révision RPM strictement supérieure peut ensuite avancer `publication` et
+lancer COPR, sans approbation supplémentaire. Une version égale ne publie rien ;
+un retour à une version inférieure est refusé.
 
-Une réussite des contrôles Arch ne remplace pas ces vérifications Fedora.
-Les guides de la RC195 et leurs résultats restent historiques.
-
-## Installation et mises à jour
-
-```bash
-sudo dnf copr enable pdenams/Mirivue-kde
-sudo dnf install mirivue-kde
-sudo dnf upgrade --refresh mirivue-kde
-```
-
-Le dépôt COPR est communautaire. Les distributions et architectures disponibles
-sont celles des constructions réellement réussies sur sa page :
-https://copr.fedorainfracloud.org/coprs/pdenams/Mirivue-kde/
-
-Le [dépôt Pacman](https://github.com/denamiel/mirivue-arch) est indépendant :
-il utilise les commits `main` validés, pas la branche COPR `publication`.
-
-## Référence officielle
-
-- https://docs.copr.fedorainfracloud.org/user_documentation.html#webhooks
-
-La grille des contrôles de consolidation figure dans `docs/VALIDATION-1.0.md`.
+Le verrou de publication reste détenu jusqu’à la réussite de Fedora 44/45.
+Le SRPM public est vérifié contre le commit Git validé avant la fin du job.
+Lire [le circuit complet](../../docs/PUBLICATION-CONTROLEE.md).

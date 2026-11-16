@@ -1,0 +1,60 @@
+name: Publication automatique des versions validées
+on:
+  workflow_run:
+    workflows: ['RPM Fedora et documentation installée', 'Paquet CachyOS et Arch Linux']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release-automatique
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      arch_run: ${{ steps.plan.outputs.arch_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python3 packaging/publier_release.py plan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan.json
+  publish:
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: publication-arch
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: mirivue-kde-arch-x86_64
+          run-id: ${{ needs.plan.outputs.arch_run }}
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Publier uniquement les artefacts du commit entièrement validé
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 packaging/publier_release.py publish

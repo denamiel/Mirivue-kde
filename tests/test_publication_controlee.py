@@ -1,11 +1,6 @@
-"""Publications only on explicit maintainer authorization.
-
-A merge into main (push), a pull request, a schedule, a release or a tag must
-never publish packages. Each publish job runs only for a manual
-workflow_dispatch on main with the typed confirmation PUBLIER, in a protected
-environment, and COPR refuses an equal or lower RPM Epoch:Version-Release.
-"""
+"""Automatic versioned publication keeps full validation and main-only environments."""
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -73,76 +68,45 @@ def events(inputs_key, extra=None):
     return denied, allowed
 
 
-class TestPublishJobsNeedExplicitAuthorization(unittest.TestCase):
-    def check_publish_job(self, name, inputs_key, environment, extra=None):
-        data = workflow(name)
-        job = data['jobs']['publish']
-        denied, allowed = events(inputs_key, extra)
-        for label, context in denied.items():
-            with self.subTest(workflow=name, event=label):
-                self.assertFalse(evaluate(job['if'], context), f'{name} publierait sur : {label}')
-        self.assertTrue(evaluate(job['if'], allowed), f'{name} ne pourrait jamais publier')
-        self.assertEqual(job.get('environment'), environment)
-        self.assertIn(inputs_key.split('.', 1)[1], data['on']['workflow_dispatch']['inputs'])
-        return data
-
-    def test_copr_publication_requires_manual_confirmation(self):
-        self.check_publish_job('fedora-package.yml', 'inputs.publier_copr', 'publication-copr')
-
-    def test_arch_release_assets_require_manual_confirmation_and_tag(self):
-        data = self.check_publish_job('arch-package.yml', 'inputs.publier_arch', 'publication-arch',
-                                      {'inputs.tag': 'v1.0.0-beta.6'})
-        job = data['jobs']['publish']
-        without_tag = {'github.event_name': 'workflow_dispatch', 'github.ref': 'refs/heads/main',
-                       'inputs.publier_arch': 'PUBLIER'}
-        self.assertFalse(evaluate(job['if'], without_tag))
-        self.assertNotIn('release', data['on'], 'une release ne doit plus déclencher de publication')
-        script = '\n'.join(step.get('run', '') for step in job['steps'])
-        self.assertIn('"$tag_commit" != "$TESTED_COMMIT"', script)
-        uploads = [line for line in script.splitlines() if 'gh release upload' in line]
-        self.assertEqual(len(uploads), 1)
-        self.assertNotIn('--clobber', uploads[0], 'un fichier déjà publié ne doit jamais être remplacé')
-
-    def test_only_publish_jobs_write_to_distributions(self):
-        for path in sorted(WORKFLOWS.glob('*.yml')):
-            data = workflow(path.name)
-            for job_name, job in data['jobs'].items():
-                script = '\n'.join(step.get('run', '') for step in job.get('steps', []))
-                with self.subTest(workflow=path.name, job=job_name):
-                    if PUBLISHING.search(script):
-                        self.assertEqual(job_name, 'publish', 'commande de publication hors du job protégé')
-                        self.assertTrue(job.get('environment'), 'job de publication sans environnement')
-
-    def test_copr_publication_requires_the_mandatory_graphical_tests(self):
-        """A failed or skipped TestLab run must block COPR, without weakening the
-        manual authorization: the publish condition keeps no status function, so
-        GitHub's implicit success() applies to every needed job."""
+class TestAutomaticPublication(unittest.TestCase):
+    def test_copr_requires_every_stable_qualification(self):
         jobs = workflow('fedora-package.yml')['jobs']
-        publish = jobs['publish']
-        self.assertTrue({'rpm', 'python', 'testlab'} <= set(publish['needs']), publish['needs'])
-        self.assertNotRegex(str(publish['if']), r'always|failure|cancelled|success|!')
-        testlab = jobs['testlab']
-        self.assertNotIn('if', testlab, 'TestLab doit tourner pour chaque révision testée')
-        self.assertNotIn('continue-on-error', testlab)
-        for step in testlab['steps']:
-            self.assertNotIn('continue-on-error', step, step.get('name'))
-        self.assertEqual(testlab['permissions'], {'contents': 'read'})
-        self.assertNotIn('secrets.', str(testlab), 'aucun secret dans le job de test')
-        self.assertEqual(testlab['env']['MIRIVUE_TESTLAB_REQUIRE_DISPLAY'], '1')
-        self.assertEqual(testlab['env']['MIRIVUE_TESTLAB_REQUIRE_CONFINEMENT'], '1')
-        self.assertTrue(testlab['env']['MIRIVUE_TESTLAB_USER'])
-        script = '\n'.join(step.get('run', '') for step in testlab['steps'])
-        self.assertIn('test_testlab_harness.py', script)
-        self.assertIn('tests/testlab/run.py nouveau-dossier', script)
-        # The publish job still requires the manual confirmation and environment.
-        self.check_publish_job('fedora-package.yml', 'inputs.publier_copr', 'publication-copr')
-
-    def test_copr_job_checks_head_ancestry_and_increasing_release(self):
-        script = '\n'.join(step.get('run', '') for step in workflow('fedora-package.yml')['jobs']['publish']['steps'])
+        job = jobs['publish']
+        expected = {'publication-plan', 'rpm', 'python', 'testlab', 'testlab-wayland',
+                    'qualification-complete', 'plasma-vm', 'medias-session', 'fichiers-images'}
+        self.assertEqual(set(job['needs']), expected)
+        self.assertNotRegex(job['if'], r'always|failure|cancelled|success|!')
+        self.assertEqual(job['environment'], 'publication-copr')
+        self.assertIn("needs.publication-plan.outputs.publish == 'true'", job['if'])
+        for name in expected - {'rpm'}:
+            self.assertNotIn('continue-on-error', jobs[name])
+        script = '\n'.join(step.get('run', '') for step in job['steps'])
         self.assertIn('git rev-parse origin/main', script)
         self.assertIn('git merge-base --is-ancestor origin/publication', script)
-        self.assertIn('verifier-revision-publication.py', script)
         self.assertLess(script.index('verifier-revision-publication.py'), script.index('git push'))
+        self.assertIn('verifier_copr_publication.py', script)
+
+    def test_arch_build_cannot_publish(self):
+        data = workflow('arch-package.yml')
+        self.assertNotIn('publish', data['jobs'])
+        self.assertNotIn('PUBLIER', str(data))
+
+    def test_release_accepts_only_successful_main_push_workflows(self):
+        data = workflow('release-automatique.yml')
+        self.assertEqual(set(data['on']['workflow_run']['workflows']),
+                         {'RPM Fedora et documentation installée', 'Paquet CachyOS et Arch Linux'})
+        condition = data['jobs']['plan']['if']
+        self.assertIn("github.event.workflow_run.event == 'push'", condition)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'", condition)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", condition)
+        publish = data['jobs']['publish']
+        self.assertEqual(publish['environment'], 'publication-arch')
+        self.assertIn("github.ref == 'refs/heads/main'", publish['if'])
+        self.assertIn("needs.plan.outputs.publish == 'true'", publish['if'])
+        downloads = [s for s in publish['steps'] if s.get('uses', '').startswith('actions/download-artifact')]
+        self.assertEqual(downloads[1]['with']['run-id'], '${{ needs.plan.outputs.arch_run }}')
+        self.assertNotIn('pull_request_target', data['on'])
+
 
 
 ENV_TOOL = ROOT / 'packaging' / 'environnements-publication.py'
@@ -154,7 +118,7 @@ env_spec.loader.exec_module(environnements)
 class TestEnvironmentRules(unittest.TestCase):
     MAINTAINER = 42
 
-    def environment(self, reviewers=((('User', 42),)), prevent=False, timer=0, bypass=False, custom=True):
+    def environment(self, reviewers=(), prevent=False, timer=0, bypass=False, custom=True):
         rules = [{'type': 'required_reviewers', 'prevent_self_review': prevent,
                   'reviewers': [{'type': kind, 'reviewer': {'id': ident, 'login': f'compte{ident}'}}
                                 for kind, ident in reviewers]}]
@@ -171,6 +135,15 @@ class TestEnvironmentRules(unittest.TestCase):
 
     def test_compliant_environment(self):
         self.assertEqual(self.analyse(self.environment(), self.branches(('branch', 'main'))), ([], []))
+
+    def test_branch_requires_pr_history_and_the_strict_signed_repository_check(self):
+        rules = json.loads((ROOT / 'packaging/protection-mirivue-arch.json').read_text())['rules']
+        self.assertEqual(environnements.branch_problems(rules), [])
+        for missing in ('pull_request', 'deletion', 'non_fast_forward', 'required_status_checks'):
+            with self.subTest(missing=missing):
+                self.assertTrue(environnements.branch_problems([r for r in rules if r['type'] != missing]))
+        rules[-1]['parameters']['required_status_checks'][0]['integration_id'] = 123
+        self.assertTrue(environnements.branch_problems(rules))
 
     def test_absent_environment_is_only_created_by_apply(self):
         self.assertEqual(self.analyse(None, None), ([], ['environnement absent']))
@@ -192,11 +165,10 @@ class TestEnvironmentRules(unittest.TestCase):
 
     def test_safe_differences_are_fixable(self):
         for environment, branches, expected in (
-                (self.environment(prevent=True), self.branches(('branch', 'main')), 'prevent_self_review'),
                 (self.environment(timer=10), self.branches(('branch', 'main')), 'délai'),
                 (self.environment(custom=False), self.branches(), 'non limité'),
                 (self.environment(), self.branches(), 'main non déclarée'),
-                (self.environment(reviewers=()), self.branches(('branch', 'main')), 'non obligatoire')):
+                (self.environment(reviewers=(('User', 42),)), self.branches(('branch', 'main')), 'manuelle')):
             with self.subTest(expected=expected):
                 blocking, fixable = self.analyse(environment, branches)
                 self.assertEqual(blocking, [])
