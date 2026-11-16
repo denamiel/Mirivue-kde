@@ -1,3 +1,8 @@
+# 1.0.3 — 16 novembre 2026
+
+- Le choix « Toujours masquer les éléments cachés au démarrage » reste respecté après navigation et ouverture d’onglets : les anciennes préférences d’affichage ne réactivent plus les éléments cachés.
+- Ctrl+H permet toujours de les afficher volontairement ; les styles mémorisés et l’état des fenêtres déjà ouvertes sont conservés.
+
 # 1.0.2 — 16 novembre 2026
 
 - Le choix « Toujours masquer les éléments cachés au démarrage » s’applique à tous les volets et onglets initiaux, y compris lors d’un lancement avec plusieurs dossiers ou de la restauration d’une session.
