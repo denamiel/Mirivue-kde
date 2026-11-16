@@ -13,8 +13,8 @@ class TestReleaseIdentity(unittest.TestCase):
         version = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
                        and any(isinstance(t,ast.Name) and t.id=='__version__' for t in n.targets))
         python_version = tomllib.loads((ROOT/'pyproject.toml').read_text())['project']['version']
-        self.assertEqual(version, '1.0.3')
-        self.assertEqual(python_version, '1.0.3')
+        self.assertEqual(version, '1.0.4')
+        self.assertEqual(python_version, '1.0.4')
         for path in ('packaging/org.pdenams.Mirivue.Qt.metainfo.xml','packaging/mirivue-local.xml'):
             release = ET.parse(ROOT/path).find('.//release')
             self.assertEqual(release.attrib['version'], version, path)
@@ -23,9 +23,9 @@ class TestReleaseIdentity(unittest.TestCase):
 
     def test_rpm_stable_identity_uses_release_one(self):
         spec = (ROOT/'packaging/fedora/mirivue-kde.spec').read_text()
-        self.assertIn('Version: 1.0.3', spec)
+        self.assertIn('Version: 1.0.4', spec)
         self.assertIn('Release: 1%{?dist}', spec)
-        self.assertIn('Mirivue-1.0.3-KDE.tar.gz', spec)
+        self.assertIn('Mirivue-1.0.4-KDE.tar.gz', spec)
 
     def test_media_read_failure_is_explained_without_claiming_a_crash(self):
         tree = ast.parse((ROOT/'mirivue/metadata.py').read_text())

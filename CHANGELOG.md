@@ -1,3 +1,9 @@
+# 1.0.4 — 16 novembre 2026
+
+- Conserve la correction du masquage des éléments cachés après navigation et ouverture d’onglets.
+- Corrige la lecture des chemins d’archives source RPM 6 dans la vérification de publication ; la comparaison intégrale avec le commit testé reste obligatoire.
+- Une nouvelle tentative peut reprendre la vérification du même commit déjà publié sans le republier.
+
 # 1.0.3 — 16 novembre 2026
 
 - Le choix « Toujours masquer les éléments cachés au démarrage » reste respecté après navigation et ouverture d’onglets : les anciennes préférences d’affichage ne réactivent plus les éléments cachés.

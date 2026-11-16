@@ -1,6 +1,7 @@
 """Automatic versioned publication keeps full validation and main-only environments."""
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -69,6 +70,39 @@ def events(inputs_key, extra=None):
 
 
 class TestAutomaticPublication(unittest.TestCase):
+    def test_retry_verifies_the_same_commit_and_stale_run_cannot_advance_publication(self):
+        script = workflow('fedora-package.yml')['jobs']['publish']['steps'][1]['run']
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            remote = root / 'remote.git'
+            work = root / 'work'
+            work.mkdir()
+            def git(*args):
+                return subprocess.check_output(['git', *map(str, args)], cwd=work,
+                                               stderr=subprocess.DEVNULL, text=True).strip()
+            git('init', '--bare', remote)
+            git('init', '--initial-branch=main')
+            git('remote', 'add', 'origin', remote)
+            def commit(message):
+                git('-c', 'user.name=Publication test', '-c', 'user.email=publication@example.invalid',
+                    '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', message)
+                return git('rev-parse', 'HEAD')
+            tested = commit('Published candidate')
+            git('push', 'origin', 'main:main', 'main:publication')
+            output = root / 'output'
+            env = dict(os.environ, TESTED_COMMIT=tested, GITHUB_OUTPUT=str(output), RUNNER_TEMP=str(root))
+            subprocess.run(['bash', '-e', '-c', script], cwd=work, env=env,
+                           capture_output=True, text=True, check=True)
+            self.assertEqual(output.read_text().strip(), 'verify=true')
+            self.assertEqual(git('ls-remote', 'origin', 'refs/heads/publication').split()[0], tested)
+            commit('New main must pass its own qualification')
+            git('push', 'origin', 'main:main')
+            output.write_text('')
+            subprocess.run(['bash', '-e', '-c', script], cwd=work, env=env,
+                           capture_output=True, text=True, check=True)
+            self.assertEqual(output.read_text().strip(), 'verify=false')
+            self.assertEqual(git('ls-remote', 'origin', 'refs/heads/publication').split()[0], tested)
+
     def test_copr_requires_every_stable_qualification(self):
         jobs = workflow('fedora-package.yml')['jobs']
         job = jobs['publish']
