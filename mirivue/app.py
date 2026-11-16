@@ -1456,6 +1456,7 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         self.hidden.setCheckable(True)
         self.hidden.setToolTip(tr('Afficher ou masquer les éléments cachés (Ctrl+H)'))
         hide_hidden_on_startup = self.settings.value('view/hide-hidden-on-startup', False, type=bool)
+        self._startup_hidden_override = hide_hidden_on_startup
         self.hidden.setChecked(False if hide_hidden_on_startup else self.settings.value('view/hidden', False, type=bool))
         self.apply_hidden_filter()
         self.hidden.toggled.connect(self.change_hidden)
@@ -2990,6 +2991,9 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         self.filesystem.setFilter(flags)
 
     def change_hidden(self, checked):
+        # Restored folder styles must not undo startup hiding. Only an explicit
+        # visibility change ends that override for this window.
+        self._startup_hidden_override = False
         if getattr(self, 'bound_pane', None) is not None:
             self.bound_pane.hidden_state = checked
             self.sync_native_navigator_state(self.bound_pane)

@@ -154,7 +154,9 @@ class ViewPolicyMixin:
             allowed = {1, 2, 3, 4, 14, 19, 20}
             pane.extra_columns = tuple(column for column in raw_columns if type(column) is int and column in allowed) if isinstance(raw_columns, (list, tuple)) else ()
             self.update_pane_extra_information(pane)
-            hidden = (False if startup and self.settings.value('view/hide-hidden-on-startup', False, type=bool)
+            hide_at_startup = ((startup or getattr(self, '_startup_hidden_override', False))
+                               and self.settings.value('view/hide-hidden-on-startup', False, type=bool))
+            hidden = (False if hide_at_startup
                       else bool(style.get('hidden', self.settings.value('view/hidden', False, type=bool))))
             previews = bool(style.get('previews', self.settings.value('view/previews', False, type=bool)))
             pane.hidden_state = hidden
