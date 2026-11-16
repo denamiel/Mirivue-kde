@@ -1,135 +1,85 @@
-# Publication contrôlée de Mirivue KDE
+# Publication automatique des versions validées
 
-**Principe :** valider le code et publier des paquets sont deux décisions
-distinctes. Une fusion dans `main`, une CI verte, un tag ou un push ne
-publient **aucun paquet**. Créer une release GitHub reste possible à la main,
-mais aucun paquet n’y est joint automatiquement. **Chaque** publication de
-paquets (COPR, paquets Arch joints à une release, dépôt Pacman) exige trois
-conditions réunies :
+La fusion d’une PR qui augmente explicitement une version constitue la décision
+de publication. Les PR, les tags seuls et les modifications sans hausse de
+version ne publient aucun paquet. Aucun jeton personnel supplémentaire n’est
+nécessaire : les workflows utilisent leur `GITHUB_TOKEN` limité au dépôt.
 
-1. un lancement **manuel** du workflow sur `main` ;
-2. la confirmation tapée `PUBLIER` ;
-3. l’**approbation** du mainteneur dans un environnement GitHub protégé.
+## KDE : du code fusionné aux paquets
 
-COPR refuse en outre toute révision RPM **égale ou inférieure** à celle déjà
-publiée (comparaison `Epoch:Version-Release` identique à `rpmvercmp`).
-Les paquets Arch ne sont joints qu’à une release dont le tag désigne exactement
-le commit construit, sans jamais remplacer un fichier déjà joint.
-`tests/test_publication_controlee.py` vérifie ces règles à chaque CI.
+1. `main` reste protégée : PR obligatoire, contrôles requis, interdiction de
+   suppression et de réécriture, aucun contournement.
+2. Le workflow Fedora vérifie les RPM stables, Python, X11, Wayland, Plasma,
+   les médias, les systèmes de fichiers et la suite intégrale. Tous ces jobs
+   bloquent la publication. Rawhide reste expérimental, sans paquet annoncé.
+3. Une révision RPM égale ne publie rien ; une révision inférieure est refusée.
+   Une révision supérieure peut avancer `publication`, uniquement si le commit
+   testé est toujours la tête de `main` et descend de la publication précédente.
+4. COPR construit automatiquement cette branche. Le job conserve son verrou
+   jusqu’à la réussite Fedora 44/45 et vérifie le commit et le contenu de
+   l’archive Git effectivement livrée dans le SRPM public.
+5. `release-automatique.yml` attend la réussite des workflows Fedora et Arch
+   du même commit de `main`. Il réutilise l’artefact Arch de cette exécution,
+   contrôle SHA256, crée le tag exact puis la release. Une release publique,
+   un tag différent et un fichier existant de contenu différent sont refusés.
 
-## Pourquoi
+Les lancements manuels servent à reprendre une exécution ; ils n’autorisent
+jamais à contourner le contrôle des sources, des versions ou des tests.
 
-Le 8 novembre 2026, la fusion de la PR n° 5 dans `main` (commit `d4d5b95`) a
-déclenché le job `publish` du workflow Fedora. Celui-ci a avancé la branche
-`publication`, et COPR a construit puis publié la build `11285421`
-(Fedora 44 et 45, 00:00–00:03 UTC). Ce paquet contient le code de la PR n° 5 mais
-porte le **même numéro** que la build précédente (`1.0.0-0.200.beta5.3`) :
-`dnf` ne le propose pas aux installations existantes. Le dépôt Pacman
-(`denamiel/mirivue-arch`) publie lui aussi automatiquement, chaque heure, les
-commits validés de `main` lorsque sa variable `PUBLISH_ENABLED` vaut `true`.
+## Dépôt Pacman signé
 
-## Environnements GitHub : à créer avant la fusion
+Le dépôt `denamiel/mirivue-arch` examine chaque heure les nouvelles versions
+validées. Il peut aussi être lancé manuellement en sélectionnant `edition=kde`
+ou `edition=gnome`. KDE exige les workflows Fedora **et** Arch réussis du commit
+sélectionné ; GNOME exige son workflow de qualification.
 
-Un environnement absent ne protège rien : GitHub le crée sans aucune règle au
-premier usage. Les trois environnements doivent donc exister **avant** la
-fusion des workflows qui les utilisent :
+Seules les éditions dont la version augmente sont reconstruites. Une édition
+inchangée ou dont les tests échouent conserve son paquet déjà publié : ses
+signatures et ses empreintes sont vérifiées, et ses tests graphiques ne bloquent
+pas une mise à jour de l’autre édition. La base Pacman reste complète et signée.
+Les tests d’installation et de corruption portent sur le catalogue préparé et
+sur les éditions modifiées.
 
-| Dépôt | Environnement | Protège |
+La publication refuse une branche de publication non protégée, une source ou
+un manifeste devenus obsolètes, une rotation implicite de clé et tout retour à
+une version inférieure. `PUBLISH_ENABLED=false` reste l’arrêt d’urgence. Les PR
+et modifications du dépôt de publication sans nouvelle version amont utilisent
+un candidat de test jetable, qui ne peut jamais être publié.
+
+## Protections GitHub attendues
+
+| Dépôt | Environnement | Restriction |
 |---|---|---|
-| `denamiel/Mirivue-kde` | `publication-copr` | avance de la branche `publication` (COPR) |
-| `denamiel/Mirivue-kde` | `publication-arch` | paquets Arch joints à une release |
-| `denamiel/mirivue-arch` | `publication-pacman` | publication du dépôt Pacman signé |
+| Mirivue-kde | publication-copr | uniquement la branche main |
+| Mirivue-kde | publication-arch | uniquement la branche main |
+| mirivue-arch | publication-pacman | uniquement la branche main |
 
-Règles : approbation obligatoire du mainteneur, déploiement limité à `main`,
-aucun délai. Tous les jobs de publication s’exécutent sur `main`
-(`workflow_dispatch`), y compris les paquets Arch : la règle « `main` seulement »
-convient donc aux trois.
+Ces environnements conservent leur restriction de branche et n’exigent plus
+l’approbation manuelle supplémentaire du mainteneur. Les permissions d’écriture
+et la clé privée de signature sont réservées aux jobs de publication. Stocker
+les clés de signature dans l’environnement `publication-pacman` est recommandé.
 
-**`Prevent self-review`** reste désactivé : avec un seul mainteneur, celui qui
-lance la publication doit pouvoir l’approuver, sinon aucune publication n’est
-possible. L’approbation reste une seconde action explicite, distincte du
-lancement et de la saisie `PUBLIER`.
-
-`--appliquer` crée un environnement absent ou complète un environnement sûr.
-S’il trouve d’autres approbateurs, d’autres règles de branche ou de tag, ou le
-contournement par les administrateurs, il les liste et **ne modifie rien** :
-les retirer soi-même dans *Settings → Environments* après vérification.
-
-**Limite.** Ces protections empêchent toute publication automatique ou
-accidentelle. Elles ne protègent pas contre une personne ou un outil disposant
-du jeton GitHub du mainteneur, qui pourrait lancer et approuver lui-même.
+`mirivue-arch/main` doit exiger une PR et le contrôle **Validation du dépôt signé**,
+sans réécriture, suppression ou contournement. Le modèle de ruleset est dans
+`packaging/protection-mirivue-arch.json`. Les protections existantes de
+`Mirivue-kde/main` restent inchangées.
 
 ```bash
-python3 packaging/environnements-publication.py --verifier    # lecture seule
-python3 packaging/environnements-publication.py --appliquer   # crée ou complète, ne supprime rien
+python3 packaging/environnements-publication.py --verifier
+# Application uniquement dans le cadre de la mise en place autorisée :
+python3 packaging/environnements-publication.py --appliquer
 ```
 
-## Publier dans COPR
+L’administration des environnements et rulesets peut nécessiter une intervention
+sur GitHub si l’intégration ne possède pas les droits Administration. Cela se
+fait une fois lors de la configuration, sans secret personnel pour les sorties
+suivantes. La suppression des trois approbations finales est une modification
+délibérée : la fusion d’une nouvelle version est désormais le feu vert.
 
-1. Vérifier que la révision RPM du commit de `main` a augmenté.
-2. Lancer le workflow :
+## Origine du changement
 
-   ```bash
-   gh workflow run fedora-package.yml --repo denamiel/Mirivue-kde --ref main -f publier_copr=PUBLIER
-   ```
-
-3. Après les contrôles RPM et Python, approuver le déploiement
-   `publication-copr` sur la page de l’exécution.
-4. Le job vérifie que le commit est toujours la tête de `main`, qu’il descend de
-   `publication` et que sa révision RPM est strictement supérieure
-   (`packaging/fedora/verifier-revision-publication.py`), puis avance `publication`.
-5. Contrôler ensuite la build COPR et son numéro, sans le supposer.
-
-## Paquets Arch joints à une release
-
-Une release ou un tag ne déclenchent plus aucune publication de paquet. Après avoir créé la release sur
-le commit de `main` à distribuer :
-
-```bash
-gh workflow run arch-package.yml --repo denamiel/Mirivue-kde --ref main \
-  -f publier_arch=PUBLIER -f tag=v1.0.0-beta.6
-```
-
-Le paquet est reconstruit sur ce commit ; après approbation de
-`publication-arch`, le job vérifie que le tag désigne ce commit, puis joint les
-fichiers sans remplacer ceux qui existent déjà.
-
-## Dépôt Pacman (`denamiel/mirivue-arch`)
-
-La modification correspondante est préparée sur la branche
-`controle/publication-explicite` de ce dépôt (pull request distincte, non
-fusionnée) : les exécutions planifiées et les push ne font plus que construire ;
-la publication exige un lancement manuel, la saisie `PUBLIER`,
-`PUBLISH_ENABLED=true` et l’approbation de `publication-pacman`.
-
-Tant qu’elle n’est pas fusionnée, le dépôt publie encore chaque heure les commits
-validés de `main` (`PUBLISH_ENABLED=true` constaté le 8 novembre 2026). Mesure
-immédiate et réversible, à décider par le mainteneur :
-
-```bash
-gh variable set PUBLISH_ENABLED --body false --repo denamiel/mirivue-arch
-```
-
-## Contrôler qu’un passage planifié ne publie rien
-
-Après fusion, sans jamais lancer une vraie publication pour tester :
-
-```bash
-gh run list --repo denamiel/mirivue-arch --workflow repository.yml --event schedule --limit 1 \
-  --json databaseId --jq '.[0].databaseId' \
-  | xargs -I{} gh run view {} --repo denamiel/mirivue-arch --json jobs \
-      --jq '.jobs[] | select(.name | startswith("Publier")) | "\(.name) : \(.conclusion)"'
-```
-
-Résultat attendu : `skipped`, et un manifeste inchangé (commande ci-dessous).
-
-## Vérifier ce qui est réellement publié
-
-```bash
-# COPR : dernière build réussie et son numéro
-curl -s "https://copr.fedorainfracloud.org/api_3/package/?ownername=pdenams&projectname=Mirivue-kde&packagename=mirivue-kde&with_latest_succeeded_build=true" \
-  | python3 -c "import json,sys; b=json.load(sys.stdin)['builds']['latest_succeeded']; print(b['id'], b['source_package']['version'])"
-# Pacman : manifeste signé du dépôt
-gh release download repository --repo denamiel/mirivue-arch --pattern manifest.json --output - \
-  | python3 -c "import json,sys; [print(k, v['pkgver'], v['pkgrel'], v.get('source_sha','')[:12]) for k, v in json.load(sys.stdin)['packages'].items()]"
-```
+Le 8 novembre 2026, une publication automatique avait réutilisé le numéro
+`1.0.0-0.200.beta5.3` : DNF ne proposait pas le correctif. Le circuit manuel
+avait alors ajouté trois approbations distinctes. Le circuit actuel prévient
+ce défaut par l’ordre strict des versions et la validation du commit, tout en
+retrouvant la publication automatique demandée par le mainteneur.

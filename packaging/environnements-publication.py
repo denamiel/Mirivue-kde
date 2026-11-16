@@ -7,14 +7,15 @@
   environnements-publication.py --appliquer  crée un environnement absent ou complète
                                              un environnement sûr ; refuse sinon
 
-Règle attendue : seul le mainteneur connecté à gh approuve, déploiement limité à
-la branche main, aucun délai, auto-approbation permise (mainteneur unique),
+Règle attendue : publication automatique après qualification, déploiement limité à
+la branche main, aucun délai ni approbation manuelle supplémentaire,
 aucun contournement par les administrateurs.
 
 --appliquer ne supprime jamais rien : s'il trouve d'autres approbateurs ou
 d'autres règles de branche ou de tag, il les liste et refuse d'agir.
 """
 import json
+from pathlib import Path
 import subprocess
 import sys
 
@@ -41,10 +42,8 @@ def analyse(environment, branch_policies, maintainer_id):
               if not (item.get('type') == 'User' and item.get('reviewer', {}).get('id') == maintainer_id)]
     if others:
         blocking.append('autres approbateurs : ' + ', '.join(others))
-    if not any(item.get('type') == 'User' and item.get('reviewer', {}).get('id') == maintainer_id for item in reviewers):
-        fixable.append('approbation du mainteneur non obligatoire')
-    if rules.get('required_reviewers', {}).get('prevent_self_review'):
-        fixable.append('prevent_self_review actif : un mainteneur unique ne pourrait pas approuver')
+    if reviewers:
+        fixable.append('approbation manuelle à retirer pour le circuit automatique')
     if rules.get('wait_timer', {}).get('wait_timer'):
         fixable.append(f"délai d’attente de {rules['wait_timer']['wait_timer']} min")
     if environment.get('can_admins_bypass'):
@@ -83,7 +82,7 @@ def read(repository, name):
 def apply(repository, name, maintainer_id):
     gh('-X', 'PUT', f'repos/{repository}/environments/{name}', '--input', '-', body={
         'wait_timer': 0, 'prevent_self_review': False,
-        'reviewers': [{'type': 'User', 'id': maintainer_id}],
+        'reviewers': [],
         'deployment_branch_policy': {'protected_branches': False, 'custom_branch_policies': True},
     })
     _environment, branches = read(repository, name)
@@ -101,7 +100,7 @@ def main(argv):
     except (LookupError, OSError) as error:
         print(f'gh indisponible ou non connecté : {error}', file=sys.stderr)
         return 2
-    print(f"Mainteneur approbateur : {user['login']}")
+    print(f"Mainteneur : {user['login']}")
     status = 0
     for repository, name in TARGETS:
         try:
@@ -112,9 +111,14 @@ def main(argv):
             continue
         blocking, fixable = analyse(environment, branches, user['id'])
         if argv[1] == '--appliquer' and fixable and not blocking:
-            apply(repository, name, user['id'])
-            environment, branches = read(repository, name)
-            blocking, fixable = analyse(environment, branches, user['id'])
+            try:
+                apply(repository, name, user['id'])
+                environment, branches = read(repository, name)
+                blocking, fixable = analyse(environment, branches, user['id'])
+            except LookupError as error:
+                print(f'✖ {repository} / {name} : modification refusée ({error})')
+                status = 1
+                continue
         problems = blocking + fixable
         if not problems:
             print(f'✔ {repository} / {name} : conforme')
@@ -123,6 +127,22 @@ def main(argv):
         print(f"✖ {repository} / {name} : {' ; '.join(problems)}")
         if blocking and argv[1] == '--appliquer':
             print('  Rien n’a été modifié : vérifiez et retirez ces éléments vous-même dans Settings > Environments.')
+    try:
+        repository = 'denamiel/mirivue-arch'
+        branch = gh(f'repos/{repository}/branches/main')
+        if not branch['protected']:
+            if argv[1] == '--appliquer':
+                ruleset = json.loads((Path(__file__).parent / 'protection-mirivue-arch.json').read_text())
+                gh('-X', 'POST', f'repos/{repository}/rulesets', '--input', '-', body=ruleset)
+                branch = gh(f'repos/{repository}/branches/main')
+            if not branch['protected']:
+                print('✖ mirivue-arch/main : protection PR et validation obligatoire à activer')
+                status = 1
+        else:
+            print('✔ mirivue-arch/main : branche protégée')
+    except LookupError as error:
+        print(f'✖ Protection mirivue-arch/main : {error}')
+        status = 1
     return status
 
 

@@ -4,11 +4,6 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      publier_copr:
-        description: 'Pour publier dans COPR le commit main testé, taper exactement PUBLIER'
-        required: false
-        default: ''
   schedule:
     - cron: '23 5 * * 1'
 permissions:
@@ -522,16 +517,23 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python packaging/check_python_runtime.py
 
+  publication-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: plan
+        run: python3 packaging/plan_rpm_publication.py
+
   publish:
     name: Publier dans COPR après les contrôles obligatoires
-    # Publication uniquement sur demande explicite : lancement manuel sur main,
-    # confirmation tapée, puis approbation dans l'environnement protégé.
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      && github.ref == 'refs/heads/main'
-      && inputs.publier_copr == 'PUBLIER'
-    # TestLab is mandatory: a failed graphical test blocks the publication.
-    needs: [rpm, python, testlab]
+    # A merged, increasing version is the publication decision. Every stable
+    # qualification must succeed; PRs and scheduled checks cannot publish.
+    if: github.ref == 'refs/heads/main' && needs.publication-plan.outputs.publish == 'true'
+    needs: [publication-plan, rpm, python, testlab, testlab-wayland, qualification-complete, plasma-vm, medias-session, fichiers-images]
     runs-on: ubuntu-latest
     environment: publication-copr
     permissions:
@@ -559,3 +561,7 @@ jobs:
           git show "$TESTED_COMMIT:packaging/fedora/mirivue-kde.spec" > "$RUNNER_TEMP/candidat.spec"
           python3 packaging/fedora/verifier-revision-publication.py "$RUNNER_TEMP/publie.spec" "$RUNNER_TEMP/candidat.spec"
           git push origin "$TESTED_COMMIT:refs/heads/publication"
+      - name: Préparer la vérification du SRPM public
+        run: sudo apt-get update && sudo apt-get install -y rpm2cpio cpio
+      - name: Vérifier la construction COPR avant la prochaine publication
+        run: python3 packaging/verifier_copr_publication.py
