@@ -148,7 +148,7 @@ jobs:
           mkdir -p qualification-artefacts
           docker run --rm --init --device "$RENDER_NODE:/dev/dri/renderD128" \
             -v "$PWD:/src:ro" -v "$PWD/qualification-artefacts:/artefacts" fedora:45 bash -euo pipefail -c '
-            dnf -y -q install python3 python3-pyyaml python3-rpm git dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
+            dnf -y -q install python3 python3-pyyaml python3-rpm git cpio dnf5-plugins xorg-x11-server-Xvfb xorg-x11-xauth xdotool xwd xclip \
               dbus-daemon dbus-tools shadow-utils kwin wl-clipboard systemd netpbm-progs >/dev/null
             cp -a /src /w && cd /w
             dnf -y -q builddep packaging/fedora/mirivue-kde.spec >/dev/null
@@ -548,6 +548,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Avancer uniquement la version testée sans écraser la publication
+        id: advance
         env:
           TESTED_COMMIT: ${{ github.sha }}
         run: |
@@ -555,6 +556,12 @@ jobs:
           # A newer main commit must pass its own checks before publication.
           if [ "$(git rev-parse origin/main)" != "$TESTED_COMMIT" ]; then
             echo 'Une version plus récente attend sa propre validation.'
+            echo 'verify=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(git rev-parse origin/publication)" = "$TESTED_COMMIT" ]; then
+            echo 'Publication déjà avancée vers ce commit ; reprise de sa vérification.'
+            echo 'verify=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git merge-base --is-ancestor origin/publication "$TESTED_COMMIT"
@@ -563,7 +570,10 @@ jobs:
           git show "$TESTED_COMMIT:packaging/fedora/mirivue-kde.spec" > "$RUNNER_TEMP/candidat.spec"
           python3 packaging/fedora/verifier-revision-publication.py "$RUNNER_TEMP/publie.spec" "$RUNNER_TEMP/candidat.spec"
           git push origin "$TESTED_COMMIT:refs/heads/publication"
+          echo 'verify=true' >> "$GITHUB_OUTPUT"
       - name: Préparer la vérification du SRPM public
+        if: steps.advance.outputs.verify == 'true'
         run: sudo apt-get update && sudo apt-get install -y rpm2cpio cpio
       - name: Vérifier la construction COPR avant la prochaine publication
+        if: steps.advance.outputs.verify == 'true'
         run: python3 packaging/verifier_copr_publication.py

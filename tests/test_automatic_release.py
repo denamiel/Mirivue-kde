@@ -1,5 +1,7 @@
 """Publication gates must reject stale, failed or untrusted source artefacts."""
 import importlib.util
+import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -16,6 +18,21 @@ copr = module('copr_verify', 'packaging/verifier_copr_publication.py')
 
 
 class AutomaticReleaseTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('cpio'), 'cpio is required for real RPM payload fixtures')
+    def test_source_payload_supports_rpm5_and_rpm6_paths_and_rejects_missing_archive(self):
+        import gzip
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            name = 'Mirivue-1.0.4-KDE.tar.gz'
+            content = gzip.compress(b'archive fixture')
+            (root / name).write_bytes(content)
+            for stored_name in (name, './' + name):
+                payload = subprocess.run(['cpio', '--quiet', '-o', '-H', 'newc'],
+                    input=(stored_name + '\n').encode(), cwd=root, capture_output=True, check=True).stdout
+                self.assertEqual(copr.extract_source_archive(payload, name), content)
+                with self.assertRaises(ValueError):
+                    copr.extract_source_archive(payload, 'missing.tar.gz')
+
     def api(self, path, **kwargs):
         if path == 'branches/main':return {'protected':True,'commit':{'sha':'a'*40}}
         if path.startswith('releases/tags/'):return None

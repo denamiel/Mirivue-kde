@@ -31,6 +31,15 @@ def archive_files(data):
         return archive.pax_headers.get('comment'), files
 
 
+def extract_source_archive(payload, name):
+    # RPM 6 prefixes source payload paths with './'; older RPMs omit it.
+    result = subprocess.run(['cpio', '--quiet', '-i', '--to-stdout', name, './' + name],
+                            input=payload, capture_output=True, check=True).stdout
+    if not result:
+        raise ValueError('Expected source archive is missing from the RPM payload')
+    return result
+
+
 def verify_sources(srpm, version, sha):
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / 'source.rpm'
@@ -38,9 +47,8 @@ def verify_sources(srpm, version, sha):
             path.write_bytes(response.read(128 * 1024 * 1024 + 1))
         if path.stat().st_size > 128 * 1024 * 1024:
             raise ValueError('Source RPM exceeds size limit')
-        actual = subprocess.check_output(['bash', '-c',
-            'set -o pipefail; rpm2cpio "$1" | cpio --quiet -i --to-stdout "$2"',
-            'verify-srpm', str(path), f'Mirivue-{version}-KDE.tar.gz'])
+        payload = subprocess.check_output(['rpm2cpio', str(path)])
+        actual = extract_source_archive(payload, f'Mirivue-{version}-KDE.tar.gz')
     expected = subprocess.check_output(['git', 'archive', '--format=tar', f'--prefix=Mirivue-{version}-KDE/', sha])
     comment, files = archive_files(gzip.decompress(actual))
     if comment != sha or files != archive_files(expected)[1]:
