@@ -81,8 +81,9 @@ Les [outils Fedora](packaging/fedora/README.md) et le
 de la branche `publication`. Le suivi Pacman utilise, lui, les commits de `main`
 ayant réussi le workflow Arch requis ; il ne dépend pas de cette branche COPR.
 Un tag ou une modification locale ne met pas directement à jour les ordinateurs.
-Une fusion dans `main` ne publie aucun paquet : chaque publication de paquets
-exige une autorisation explicite du mainteneur
+La fusion d’une nouvelle version dans `main` déclenche sa publication automatique
+après réussite des contrôles du même commit. Une fusion sans augmentation de
+version ne republie aucun paquet
 ([publication contrôlée](docs/PUBLICATION-CONTROLEE.md)).
 
 Les constructions Arch et les essais hors écran ne remplacent pas une validation
