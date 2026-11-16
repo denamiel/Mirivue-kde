@@ -2,8 +2,8 @@
 
 ## Références de version
 
-Version préparée : **1.0.2**, publiée. Dans la recette :
-`Version: 1.0.2` et `Release: 1%{?dist}`.
+Version préparée : **1.0.3**. Dans la recette :
+`Version: 1.0.3` et `Release: 1%{?dist}`.
 Les révisions précédentes `0.196.beta1.1` et `0.196.beta1.2` sont historiques.
 Historiquement, la révision 3 a ajouté les guides corrigés sous `/usr/share/doc/mirivue-kde/`
 et permet leur distribution par une mise à jour DNF.

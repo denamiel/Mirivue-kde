@@ -115,6 +115,35 @@ class TestStartupHidden(unittest.TestCase):
         self.assertTrue(window.hidden.isChecked())
         self.assertIn('.secret', [r.path.name for r in window.model.rows])
 
+    def test_navigation_and_new_tabs_keep_startup_hiding(self):
+        for per_folder in (False, True):
+            with self.subTest(per_folder=per_folder):
+                self.saved_visible_hidden(per_folder=per_folder)
+                window = self.new_window()
+                window.prepare_startup_browsing(str(self.folders[0]))
+                window.start_browsing()
+                self.settle()
+                window.navigate(str(self.folders[1]))
+                self.settle()
+                self.assert_hidden(window.bound_pane)
+                window.open_new_tab(str(self.folders[2]))
+                self.settle()
+                self.assert_hidden(window.bound_pane)
+                self.assertTrue(self.settings.value('view/common-style')['hidden'])
+
+    def test_explicit_show_hidden_releases_startup_hiding_for_navigation(self):
+        self.saved_visible_hidden()
+        window = self.new_window()
+        window.prepare_startup_browsing(str(self.folders[0]))
+        window.start_browsing()
+        self.settle()
+        window.hidden.setChecked(True)
+        self.settle()
+        window.navigate(str(self.folders[1]))
+        self.settle()
+        self.assertTrue(window.hidden.isChecked())
+        self.assertIn('.secret', [r.path.name for r in window.model.rows])
+
     def test_real_split_command_line_hides_both_initial_folders(self):
         self.saved_visible_hidden()
         self.settings.sync()
