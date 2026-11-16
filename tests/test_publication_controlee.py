@@ -1,5 +1,6 @@
 """Automatic versioned publication keeps full validation and main-only environments."""
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -134,6 +135,15 @@ class TestEnvironmentRules(unittest.TestCase):
 
     def test_compliant_environment(self):
         self.assertEqual(self.analyse(self.environment(), self.branches(('branch', 'main'))), ([], []))
+
+    def test_branch_requires_pr_history_and_the_strict_signed_repository_check(self):
+        rules = json.loads((ROOT / 'packaging/protection-mirivue-arch.json').read_text())['rules']
+        self.assertEqual(environnements.branch_problems(rules), [])
+        for missing in ('pull_request', 'deletion', 'non_fast_forward', 'required_status_checks'):
+            with self.subTest(missing=missing):
+                self.assertTrue(environnements.branch_problems([r for r in rules if r['type'] != missing]))
+        rules[-1]['parameters']['required_status_checks'][0]['integration_id'] = 123
+        self.assertTrue(environnements.branch_problems(rules))
 
     def test_absent_environment_is_only_created_by_apply(self):
         self.assertEqual(self.analyse(None, None), ([], ['environnement absent']))

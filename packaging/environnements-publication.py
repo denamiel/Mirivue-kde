@@ -91,6 +91,17 @@ def apply(repository, name, maintainer_id):
            '-f', 'name=main', '-f', 'type=branch')
 
 
+def branch_problems(rules):
+    types = {rule['type'] for rule in rules}
+    problems = [kind + ' manquant' for kind in ('pull_request', 'deletion', 'non_fast_forward') if kind not in types]
+    checks = [r['parameters'] for r in rules if r['type'] == 'required_status_checks']
+    if not any(c.get('strict_required_status_checks_policy') and any(
+            item.get('context') == 'Validation du dépôt signé' and item.get('integration_id') == 15368
+            for item in c.get('required_status_checks', [])) for c in checks):
+        problems.append('validation stricte « Validation du dépôt signé » manquante')
+    return problems
+
+
 def main(argv):
     if len(argv) != 2 or argv[1] not in ('--verifier', '--appliquer'):
         print(__doc__.split('\n\n')[1], file=sys.stderr)
@@ -138,8 +149,13 @@ def main(argv):
             if not branch['protected']:
                 print('✖ mirivue-arch/main : protection PR et validation obligatoire à activer')
                 status = 1
-        else:
-            print('✔ mirivue-arch/main : branche protégée')
+        if branch['protected']:
+            problems = branch_problems(gh(f'repos/{repository}/rules/branches/main'))
+            if problems:
+                print('✖ mirivue-arch/main : ' + ' ; '.join(problems))
+                status = 1
+            else:
+                print('✔ mirivue-arch/main : PR, validation stricte et historique protégés')
     except LookupError as error:
         print(f'✖ Protection mirivue-arch/main : {error}')
         status = 1
