@@ -525,6 +525,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Tester les refus de publication et l’identité des sources
+        run: python3 -m unittest discover -s tests -p test_automatic_release.py -v
       - id: plan
         run: python3 packaging/plan_rpm_publication.py
 
