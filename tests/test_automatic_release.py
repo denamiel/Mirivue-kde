@@ -74,11 +74,20 @@ class AutomaticReleaseTests(unittest.TestCase):
 
     def test_source_archive_identity_includes_content_and_git_commit(self):
         import subprocess
-        data=subprocess.check_output(['git','archive','--format=tar','HEAD'],cwd=ROOT)
-        commit,files=copr.archive_files(data)
-        self.assertEqual(commit,subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip())
-        self.assertIn('mirivue/app.py',files)
-        self.assertNotEqual(files['mirivue/app.py'],files['README.md'])
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            (root/'source.py').write_text('print("source")\n')
+            (root/'README.md').write_text('Archive fixture\n')
+            def git(*args):
+                return subprocess.check_output(['git',*args],cwd=root,text=True)
+            git('init','--quiet')
+            git('add','.')
+            git('-c','user.name=Archive test','-c','user.email=archive@example.invalid',
+                '-c','commit.gpgsign=false','commit','--quiet','-m','Archive fixture')
+            data=subprocess.check_output(['git','archive','--format=tar','HEAD'],cwd=root)
+            commit,files=copr.archive_files(data)
+            self.assertEqual(commit,git('rev-parse','HEAD').strip())
+            self.assertNotEqual(files['source.py'],files['README.md'])
 
 
 if __name__ == '__main__':unittest.main()
