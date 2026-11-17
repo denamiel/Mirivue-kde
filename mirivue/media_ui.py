@@ -9,6 +9,7 @@ from .media import FIELDS, kind, suggestions, companion
 from .media_tags import native_route, TagWorker, read_cover
 from . import library
 from .iconography import themed_icon, set_themed_action_icon, context_help_button
+from .open_with import preferred_application_icon
 from .diagnostics import record_tool_failure
 from .platform_services import services
 from .preview_cache import PreviewCache
@@ -54,21 +55,8 @@ def is_openable_document(row):
 
 
 def default_application_icon(path):
-    """Resolve the preferred KDE application just as the Open With menu does."""
     mime = document_mime(path)
-    icon = QIcon()
-    helper = services.tool_path('mirivue-kio-applications')
-    if helper:
-        try:
-            import json
-            import subprocess
-            result = subprocess.run([helper, '--default', mime.name()],
-                                    capture_output=True, text=True, timeout=3, check=True)
-            icon_name = json.loads(result.stdout).get('icon', '')
-            if icon_name:
-                icon = QIcon.fromTheme(icon_name)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            pass
+    icon = preferred_application_icon(mime.name())
     if icon.isNull():
         icon = QIcon.fromTheme(mime.iconName())
     return icon

@@ -2,6 +2,7 @@ from __future__ import annotations
 from .i18n import tr
 tr('System application associations, isolated behind a platform-aware menu.')
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from PySide6.QtCore import QThread, QMimeDatabase, QProcess
@@ -42,6 +43,20 @@ class ApplicationLookup(QThread):
             self.apps = [Application(item['identifier'], item['name'], item['identifier'], item['icon']) for item in json.loads(result.stdout)]
         except (OSError, AttributeError, ValueError, KeyError, subprocess.SubprocessError) as error:
             self.error = str(error)
+
+def preferred_application_icon(mime_type):
+    helper = services.tool_path('mirivue-kio-applications')
+    if helper:
+        try:
+            result = subprocess.run([helper, '--default', mime_type],
+                                    capture_output=True, text=True, timeout=3, check=True)
+            icon_name = json.loads(result.stdout).get('icon', '')
+            if icon_name:
+                return QIcon(icon_name) if os.path.isabs(icon_name) else QIcon.fromTheme(icon_name)
+        except (OSError, AttributeError, TypeError, ValueError, subprocess.SubprocessError):
+            pass
+    return QIcon()
+
 
 def open_default(paths):
     return all(services.open_default_file(path) for path in paths)
