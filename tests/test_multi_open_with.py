@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from PySide6.QtCore import QMimeDatabase,QUrl
+from PySide6.QtGui import QIcon,QPixmap
 from PySide6.QtWidgets import QApplication,QMenu,QWidget
 from mirivue.i18n import tr,trf
 from mirivue import open_with
@@ -68,6 +69,21 @@ class TestMultipleOpening(unittest.TestCase):
                 insert.assert_not_called();self.assertEqual(len(menu.actions()),2)
                 self.assertIsNotNone(menu.actions()[1].menu())
             finally:owner.close()
+    def test_single_file_open_action_uses_the_preferred_application_icon(self):
+        owner = Owner(count=1)
+        pixmap = QPixmap(16, 16)
+        pixmap.fill()
+        icon = QIcon(pixmap)
+        try:
+            with patch.object(open_with, 'preferred_application_icon', return_value=icon) as lookup:
+                menu = self.menu(owner)
+            action = menu.actions()[0]
+            lookup.assert_called_once_with(QMimeDatabase().mimeTypeForFile(str(owner.rows[0].path)).name())
+            self.assertEqual(action.icon().cacheKey(), icon.cacheKey())
+            action.trigger()
+            owner.open_selected.assert_called_once()
+        finally:
+            owner.close()
     def test_native_bridge_receives_every_encoded_url(self):
         owner=Owner();menu=QMenu(owner);function=Mock(return_value=1)
         library=SimpleNamespace(mirivue_open_with_actions=function)

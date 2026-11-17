@@ -4939,8 +4939,12 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
             from .open_with import add_native_open_with
             native_open_with = add_native_open_with(self, menu, paths)
         executable_text = False
-        if count == 1 and isinstance(paths[0], Path) and not row.is_dir:
-            mime_type = QMimeDatabase().mimeTypeForFile(
+        local_path = count == 1 and isinstance(paths[0], Path)
+        local_file = local_path and not row.is_dir
+        archive = local_path and archive_protocol(paths[0])
+        if local_file:
+            mime_database = QMimeDatabase()
+            mime_type = mime_database.mimeTypeForFile(
                 str(paths[0]), QMimeDatabase.MatchMode.MatchContent
             )
             executable_text = is_executable_text_file(paths[0], mime_type)
@@ -4953,7 +4957,12 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         elif not native_open_with:
             open_action = menu.addAction(tr('Ouvrir') if count == 1 else trf('Ouvrir les \x1f0\x1f éléments sélectionnés', count), self.open_selected)
             set_themed_action_icon(open_action, tr('document-open'))
-        if count == 1 and isinstance(paths[0], Path) and archive_protocol(paths[0]):
+            if local_file and not archive:
+                from .open_with import preferred_application_icon
+                icon = preferred_application_icon(mime_database.mimeTypeForFile(str(paths[0])).name())
+                if not icon.isNull():
+                    open_action.setIcon(icon)
+        if archive:
             browse_archive = menu.addAction(tr('Parcourir l’archive'), lambda target=paths[0]: self.open_archive(target))
             set_themed_action_icon(browse_archive, tr('document-open-folder'))
             browse_archive.setEnabled(services.is_plasma)

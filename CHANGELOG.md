@@ -1,3 +1,7 @@
+# 1.0.5 — 17 novembre 2026
+
+- L’action « Ouvrir » du menu contextuel affiche l’icône de l’application par défaut pour les fichiers locaux.
+
 # 1.0.4 — 16 novembre 2026
 
 - Conserve la correction du masquage des éléments cachés après navigation et ouverture d’onglets.
