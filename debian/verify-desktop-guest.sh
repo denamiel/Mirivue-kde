@@ -103,7 +103,11 @@ else
     sleep 1
   done
   pactl load-module module-null-sink sink_name=mirivue_validation
-  pactl set-default-sink mirivue_validation
+  for ((attempt=0; attempt<20; attempt++)); do
+    if pactl set-default-sink mirivue_validation; then break; fi
+    sleep 1
+  done
+  pactl list short sinks
 fi
 status=0
 gtk-launch "$desktop" || status=1
