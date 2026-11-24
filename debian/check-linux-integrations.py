@@ -1,23 +1,13 @@
 """Integration checks run in a disposable GNOME or Plasma desktop session."""
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import traceback
 from pathlib import Path
 
 from PIL import Image
-
-
-def wait_for(predicate):
-    deadline = time.monotonic() + 8
-    while time.monotonic() < deadline:
-        result = predicate()
-        if result:
-            return result
-        time.sleep(0.2)
-    raise AssertionError("Le résultat attendu n’est pas apparu.")
 
 
 class Gnome:
@@ -104,17 +94,12 @@ class Kde:
         )
         assert ok, (command, error)
 
-    def trash_roundtrip(self, file):
-        self.request("trash", [file.as_uri()])
-        assert not file.exists(), file
-
-        def find():
-            entries = self.services.list_kio_location("trash:/") or ()
-            return [entry["url"] for entry in entries if entry.get("originalPath") == str(file)]
-
-        uri, = wait_for(find)
-        self.request("restore", [uri])
-        assert file.read_bytes() == b"Mirivue\n"
+    def check_filesystem(self, directory, label):
+        qualifier = Path(__file__).resolve().parents[1] / "packaging/qualifier_fichiers_stable.py"
+        environment = dict(os.environ, MIRIVUE_FILESYSTEM_ROOT=str(directory),
+                           MIRIVUE_FILESYSTEM_TYPE=label.lower())
+        subprocess.run([sys.executable, str(qualifier)], env=environment,
+                       check=True, timeout=85)
 
     def download(self, url, destination):
         entries = self.services.list_kio_location(url)
@@ -137,10 +122,13 @@ def run(backend):
     for label in ("EXT4", "NTFS"):
         directory = Path("/media/validation") / f"MIRIVUE_{label}"
         try:
-            with tempfile.TemporaryDirectory(dir=directory) as sample:
-                file = Path(sample) / "corbeille.txt"
-                file.write_bytes(b"Mirivue\n")
-                backend.trash_roundtrip(file)
+            if isinstance(backend, Kde):
+                backend.check_filesystem(directory, label)
+            else:
+                with tempfile.TemporaryDirectory(dir=directory) as sample:
+                    file = Path(sample) / "corbeille.txt"
+                    file.write_bytes(b"Mirivue\n")
+                    backend.trash_roundtrip(file)
             print(f"Corbeille et restauration sur {label} vérifiées", flush=True)
         except Exception:
             traceback.print_exc()

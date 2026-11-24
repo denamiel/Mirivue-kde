@@ -17,7 +17,7 @@ Architecture: any
 Depends: ${misc:Depends}, ${python3:Depends}, ${shlibs:Depends},
  python3-pyside6.qtwidgets (>= 6.8), python3-pyside6.qtdbus,
  python3-pyside6.qtmultimedia, python3-pyside6.qtmultimediawidgets, python3-pyside6.qtpdf,
- qt6-wayland, kio6 (>= 6.21), kio-extras, kdialog, ark, appstream,
+ qt6-wayland, kio6 (>= 6.21), kio-extras, kdialog, ark, appstream, kf6-breeze-icon-theme,
  python3-pil, python3-mutagen, hicolor-icon-theme, ffmpeg, mediainfo, gstreamer1.0-plugins-good,
  libimage-exiftool-perl, mkvtoolnix, 7zip, unar
 Recommends: konsole

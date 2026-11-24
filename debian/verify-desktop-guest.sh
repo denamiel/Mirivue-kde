@@ -100,5 +100,5 @@ fi
 if [[ "$pkg" == mirivue-kde ]]; then
   export PYTHONPATH=/usr/lib/mirivue-kde
 fi
-timeout 240 /usr/bin/python3 "$HOME/source/debian/check-linux-integrations.py" "$pkg"
+timeout 360 /usr/bin/python3 "$HOME/source/debian/check-linux-integrations.py" "$pkg"
 SESSION
