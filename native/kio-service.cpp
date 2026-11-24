@@ -6,6 +6,8 @@
 #include <QSocketNotifier>
 #include <QUrl>
 #include <QHash>
+#include <QFile>
+#include <QFileInfo>
 #include <QTimer>
 
 #include <KIO/CopyJob>
@@ -21,7 +23,20 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/statvfs.h>
 
+
+static bool onReadOnlyFilesystem(const QUrl &destination)
+{
+    if (!destination.isLocalFile())
+        return false;
+    const QString path = destination.toLocalFile();
+    struct statvfs info {};
+    if (statvfs(QFile::encodeName(path).constData(), &info) != 0
+        && statvfs(QFile::encodeName(QFileInfo(path).absolutePath()).constData(), &info) != 0)
+        return false;
+    return (info.f_flag & ST_RDONLY) != 0;
+}
 
 // DeleteOrTrashJob does not implement doKill(). Keep KDE's confirmation and
 // undo recording, but propagate cancellation to its active subjob.
@@ -263,6 +278,13 @@ private:
             return;
         }
 
+        // A read-only mount cannot be made writable by a KIO authorization prompt.
+        if (!destinationless && onReadOnlyFilesystem(destination)) {
+            write({{"event", "complete"}, {"id", id}, {"ok", false},
+                   {"error", "Le système de fichiers de destination est en lecture seule."}});
+            return;
+        }
+
         if (command == "mkdir") {
             auto *job = KIO::mkdir(destination);
             job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, nullptr));
@@ -315,10 +337,9 @@ private:
             job = KIO::move(sources, destination);
         else
             job = KIO::copy(sources, destination);
-        // Keep the native collision dialogs. Mirivue reports the final error
-        // after receiving the completion reply, so do not open a second
-        // error dialog from the transfer helper before it sends that reply.
-        job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingDisabled, nullptr));
+        // KIO owns conflict handling; attach its normal Plasma UI delegate so
+        // name collisions can present the native merge/replace/skip choices.
+        job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, nullptr));
         jobs.insert(id, job);
         if (command == "copy" || command == "copyas")
             undo->recordCopyJob(static_cast<KIO::CopyJob *>(job));
