@@ -13,7 +13,7 @@ override_dh_auto_install:
 	bash debian/install-package.sh "$(CURDIR)/debian/mirivue-kde"
 
 override_dh_python3:
-	dh_python3 /usr/lib/mirivue-kde
+	dh_python3 /usr/lib/mirivue-kde/mirivue
 
 override_dh_shlibdeps:
 	dh_shlibdeps -l$(CURDIR)/debian/mirivue-kde/usr/lib/mirivue-kde/tools
