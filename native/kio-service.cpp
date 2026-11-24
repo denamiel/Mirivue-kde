@@ -315,9 +315,10 @@ private:
             job = KIO::move(sources, destination);
         else
             job = KIO::copy(sources, destination);
-        // KIO owns conflict handling; attach its normal Plasma UI delegate so
-        // name collisions can present the native merge/replace/skip choices.
-        job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingEnabled, nullptr));
+        // Keep the native collision dialogs. Mirivue reports the final error
+        // after receiving the completion reply, so do not open a second
+        // error dialog from the transfer helper before it sends that reply.
+        job->setUiDelegate(KIO::createDefaultJobUiDelegate(KJobUiDelegate::AutoHandlingDisabled, nullptr));
         jobs.insert(id, job);
         if (command == "copy" || command == "copyas")
             undo->recordCopyJob(static_cast<KIO::CopyJob *>(job));

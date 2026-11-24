@@ -31,7 +31,7 @@ case "$edition" in
   kde)
     desktop=org.pdenams.Mirivue.Qt
     manager=sddm
-    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends kubuntu-desktop plasma-workspace kwin-wayland sddm dolphin python3-pyside6.qttest
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends kubuntu-desktop plasma-workspace kwin-wayland sddm dolphin python3-pyside6.qttest pulseaudio-utils
     sudo install -d /etc/sddm.conf.d
     printf '[Autologin]\nUser=validation\nSession=plasma.desktop\n' | sudo tee /etc/sddm.conf.d/99-validation.conf
     ;;
@@ -97,6 +97,13 @@ if [[ "$pkg" == mirivue-gnome ]]; then
   gsettings set org.gnome.desktop.session idle-delay 0
 else
   export QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+  systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber.service
+  for ((attempt=0; attempt<20; attempt++)); do
+    if pactl info >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  pactl load-module module-null-sink sink_name=mirivue_validation
+  pactl set-default-sink mirivue_validation
 fi
 status=0
 gtk-launch "$desktop" || status=1

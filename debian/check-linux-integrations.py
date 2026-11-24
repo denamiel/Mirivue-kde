@@ -200,7 +200,7 @@ def run(backend):
                 image.save(directory / "test.pdf")
             ffmpeg = shutil.which("ffmpeg")
             assert ffmpeg
-            for source, output in (("sine=frequency=440", "test.wav"), ("color=c=blue:s=80x80:r=10", "test.mp4")):
+            for source, output in (("sine=frequency=440", "test.wav"), ("color=c=blue:s=80x80:r=10", "test.webm")):
                 subprocess.run(
                     [ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i", source,
                      "-t", "4", str(directory / output)],
