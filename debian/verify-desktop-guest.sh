@@ -81,6 +81,11 @@ if [[ "$display_ready" != true ]]; then
 fi
 loginctl show-session "$session" -p Type -p Desktop -p Active
 bash debian/prepare-integration-fixtures.sh
+if [[ "$edition" == kde ]]; then
+  sudo install -d -m 0755 /mnt/mirivue-readonly /mnt/mirivue-small
+  sudo mount -t tmpfs -o ro,size=2M tmpfs /mnt/mirivue-readonly
+  sudo mount -t tmpfs -o size=16M,mode=1777 tmpfs /mnt/mirivue-small
+fi
 systemd-run --user --wait --pipe --collect bash -s -- "$pkg" "$desktop" <<'SESSION'
 set -euo pipefail
 pkg=$1
@@ -126,7 +131,9 @@ if [[ "$pkg" == mirivue-gnome ]]; then
 else
   timeout 90 "$pkg" --native-places-contract || status=1
   timeout 90 "$pkg" --ui-contract || status=1
-  export PYTHONPATH=/usr/lib/mirivue-kde
+  export PYTHONPATH=/usr/lib/mirivue-kde LANGUAGE=fr
+  export MIRIVUE_TEST_READONLY_ROOT=/mnt/mirivue-readonly
+  export MIRIVUE_TEST_FULL_ROOT=/mnt/mirivue-small MIRIVUE_TEST_PRIVATE_TMPFS=1
   timeout 240 /usr/bin/python3 -m unittest discover -s "$HOME/source/tests" -p "test_native_kio_transfers_integration.py" -v || status=1
   unset PYTHONPATH
 fi

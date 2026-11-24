@@ -122,12 +122,11 @@ class TestNativeKioTransfers(unittest.TestCase):
         self.assertEqual(existing.read_bytes(), b'keep destination')
 
     def test_read_only_destination_preserves_source(self):
-        readonly = Path('/sys')
+        readonly = Path(os.environ.get('MIRIVUE_TEST_READONLY_ROOT', '/sys'))
         self.assertTrue(os.statvfs(readonly).f_flag & os.ST_RDONLY,
-                        'CI requires a read-only /sys mount')
+                        'CI requires a read-only test mount')
         source = self.source / '.hidden'
-        # A unique absent name avoids any existing system entry. /sys is
-        # read-only even for root inside the Fedora CI container.
+        # A unique name also works with the default read-only /sys mount.
         source = source.rename(self.source / ('mirivue-test-' + self.root.name))
         ok, error = self.request('move', source, readonly)
         self.assertFalse(ok)
@@ -142,7 +141,7 @@ class TestNativeKioTransfers(unittest.TestCase):
     def test_full_destination_preserves_cross_filesystem_move_source(self):
         # Docker's /dev/shm is a private, bounded tmpfs (not the host's disk).
         # Actually exhaust it instead of injecting an error in another engine.
-        shared = Path('/dev/shm')
+        shared = Path(os.environ.get('MIRIVUE_TEST_FULL_ROOT', '/dev/shm'))
         total = os.statvfs(shared).f_blocks * os.statvfs(shared).f_frsize
         self.assertLessEqual(total, 128 * 1024 * 1024,
                              'Only run this test in a small private CI tmpfs')
