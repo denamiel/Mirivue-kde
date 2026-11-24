@@ -4,6 +4,11 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@ --with python3 --buildsystem=cmake+ninja --sourcedirectory=native --builddirectory=debian/build
 
+override_dh_auto_test:
+	python3 -m compileall -q mirivue
+	test -x debian/build/mirivue-kio-service
+	test -x debian/build/mirivue-kio-list
+
 override_dh_auto_install:
 	bash debian/install-package.sh "$(CURDIR)/debian/mirivue-kde"
 

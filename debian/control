@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Mirivue contributors <346808704+denamiel@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13), dh-python, python3, desktop-file-utils,
  cmake, ninja-build, g++, extra-cmake-modules, qt6-base-dev,
- libkf6kio-dev, libkf6colorscheme-dev, libkf6newstuff-dev, libkf6windowsystem-dev,
+ libkf6kio-dev (>= 6.21), libkf6colorscheme-dev, libkf6newstuff-dev, libkf6windowsystem-dev,
  libkf6guiaddons-dev, libkf6widgetsaddons-dev, libkf6textwidgets-dev, libkf6i18n-dev,
  libkf6config-dev, libkf6coreaddons-dev, libkf6iconthemes-dev, libkf6jobwidgets-dev,
  libkf6xmlgui-dev, libkf6configwidgets-dev, libkf6service-dev, libkf6parts-dev
@@ -17,7 +17,7 @@ Architecture: any
 Depends: ${misc:Depends}, ${python3:Depends}, ${shlibs:Depends},
  python3-pyside6.qtwidgets (>= 6.8), python3-pyside6.qtdbus,
  python3-pyside6.qtmultimedia, python3-pyside6.qtmultimediawidgets, python3-pyside6.qtpdf,
- qt6-wayland, kio6, kio-extras, kdialog, ark, appstream,
+ qt6-wayland, kio6 (>= 6.21), kio-extras, kdialog, ark, appstream,
  python3-pil, python3-mutagen, hicolor-icon-theme, ffmpeg, mediainfo, gstreamer1.0-plugins-good,
  libimage-exiftool-perl, mkvtoolnix, 7zip, unar
 Recommends: konsole
