@@ -17,7 +17,3 @@ override_dh_python3:
 
 override_dh_shlibdeps:
 	dh_shlibdeps -l$(CURDIR)/debian/mirivue-kde/usr/lib/mirivue-kde/tools
-
-override_dh_fixperms:
-	dh_fixperms
-	chmod 0755 debian/mirivue-kde/usr/lib/mirivue-kde/tools/libmirivue-*.so

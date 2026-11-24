@@ -13,6 +13,8 @@ collect_launch_log() {
 trap collect_launch_log EXIT
 dpkg-query -W mirivue-kde
 mirivue-kde --version
+stat -c '%A %n' /usr/lib/mirivue-kde/tools/libmirivue-*.so
+ldd /usr/lib/mirivue-kde/tools/libmirivue-dolphin-view.so
 export PYTHONFAULTHANDLER=1
 export XDG_RUNTIME_DIR
 XDG_RUNTIME_DIR=$(mktemp -d)
