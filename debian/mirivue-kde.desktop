@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Mirivue KDE
+GenericName=Gestionnaire de fichiers
+Exec=/usr/bin/mirivue-kde %U
+TryExec=/usr/bin/mirivue-kde
+Icon=org.pdenams.Mirivue.Qt
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.pdenams.Mirivue.Qt
+Categories=Qt;KDE;System;FileTools;FileManager;
+MimeType=inode/directory;
