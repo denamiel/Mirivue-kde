@@ -31,7 +31,7 @@ case "$edition" in
   kde)
     desktop=org.pdenams.Mirivue.Qt
     manager=sddm
-    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends kubuntu-desktop plasma-workspace kwin-wayland sddm dolphin
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends kubuntu-desktop plasma-workspace kwin-wayland sddm dolphin python3-pyside6.qttest
     sudo install -d /etc/sddm.conf.d
     printf '[Autologin]\nUser=validation\nSession=plasma.desktop\n' | sudo tee /etc/sddm.conf.d/99-validation.conf
     ;;
