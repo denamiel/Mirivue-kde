@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 from pathlib import Path
 
@@ -76,7 +77,7 @@ class Gnome:
 
         assert render_pdf_page(directory / "test.pdf", 0, directory / "page.png") == 1
         assert Image.open(directory / "page.png").width > 0
-        for name in ("test.wav", "test.mp4"):
+        for name in ("test.wav", "test.webm"):
             assert inspect_media(directory / name).media_technical, name
 
 
@@ -108,13 +109,58 @@ class Kde:
         self.request("copy", [child], destination.as_uri())
 
     def check_media(self, directory):
+        from PySide6.QtCore import QItemSelectionModel
+        from PySide6.QtTest import QTest
+        from mirivue.app import Window
+        from mirivue.background_listing import listed_media_entry
         from mirivue.media import inspect_media
         from mirivue.media_preview import render_pdf_page
 
         image, pages = render_pdf_page(directory / "test.pdf")
         assert pages == 1 and not image.isNull()
-        for name in ("test.wav", "test.mp4"):
-            assert inspect_media(directory / name).media_technical, name
+        window = Window()
+        window.prepare_startup_browsing(str(directory))
+        window.show()
+        window.preview_dock.show()
+
+        def wait_for(predicate, message):
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                self.app.processEvents()
+                if predicate():
+                    return
+                QTest.qWait(50)
+            raise AssertionError(message)
+
+        try:
+            wait_for(lambda: not window.scanning, "Le dossier d’essai n’a pas été chargé.")
+            window.visible_watcher.blockSignals(True)
+            for name in ("test.wav", "test.webm"):
+                path = directory / name
+                assert inspect_media(path).media_technical, name
+                window.model.clear()
+                window.model.add(listed_media_entry(path))
+                index = window.proxy.index(0, 0)
+                assert index.isValid()
+                view = window.active_view()
+                view.selectionModel().setCurrentIndex(
+                    index, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows
+                )
+                window.update_media_preview()
+                window.play_media_at(0)
+                player = window.media_player
+                assert player is not None, name
+                wait_for(lambda: player.position() > 250, player.errorString() or name)
+                if name.endswith(".webm"):
+                    wait_for(lambda: player.videoSink().videoFrame().isValid(), "Image vidéo absente.")
+                window.toggle_media_playback()
+                wait_for(lambda: player.playbackState() == player.PlaybackState.PausedState,
+                         "La lecture ne se met pas en pause.")
+                window.stop_media_playback()
+        finally:
+            window.quit_requested = True
+            window.close()
+            self.app.processEvents()
 
 
 def run(backend):
@@ -157,11 +203,11 @@ def run(backend):
             for source, output in (("sine=frequency=440", "test.wav"), ("color=c=blue:s=80x80:r=10", "test.mp4")):
                 subprocess.run(
                     [ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi", "-i", source,
-                     "-t", "1", str(directory / output)],
+                     "-t", "4", str(directory / output)],
                     check=True, timeout=30,
                 )
             backend.check_media(directory)
-        print("Rendu PDF et analyse audio et vidéo vérifiés", flush=True)
+        print("Rendu PDF, lecture et pause des fichiers audio et vidéo vérifiés", flush=True)
     except Exception:
         traceback.print_exc()
         failures.append("médias")
