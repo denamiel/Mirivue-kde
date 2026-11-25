@@ -1,0 +1,86 @@
+name: Publication du paquet KDE pour Kubuntu 26.04
+
+on:
+  push:
+    branches: [codex/publication-deb-kubuntu-26-04]
+    paths: [.github/workflows/publish-kubuntu-deb.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Construire et vérifier le paquet amd64
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ebede96ae28cb68687f3d1b498ccfe941fa2371b
+          persist-credentials: false
+      - name: Construire et vérifier l’installation et le lancement
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential devscripts equivs ca-certificates
+          mk-build-deps --install --remove --tool 'apt-get -y --no-install-recommends' debian/control
+          dpkg-buildpackage --build=binary --no-sign
+          package=../mirivue-kde_1.0.5-1_amd64.deb
+          test "$(dpkg-deb -f "$package" Package)" = mirivue-kde
+          test "$(dpkg-deb -f "$package" Version)" = 1.0.5-1
+          test "$(dpkg-deb -f "$package" Architecture)" = amd64
+          apt-get install -y "$package" xvfb xauth dbus-x11 imagemagick xdotool libgtk-3-bin
+          mkdir -p /tmp/mirivue-validation
+          useradd -m mirivue-validation
+          chown mirivue-validation /tmp/mirivue-validation
+          runuser -u mirivue-validation -- bash -c 'cd "$HOME"; timeout 120 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- bash "$1/debian/verify-installed.sh"' bash "$GITHUB_WORKSPACE"
+          mkdir dist
+          cp "$package" dist/
+          cd dist
+          sha256sum mirivue-kde_1.0.5-1_amd64.deb > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mirivue-kde-kubuntu-26.04-amd64
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publier le .deb dans GitHub Releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mirivue-kde-kubuntu-26.04-amd64
+          path: dist
+      - name: Créer la release Kubuntu 26.04
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: dist
+        run: |
+          sha256sum --check SHA256SUMS
+          cat > "$RUNNER_TEMP/mirivue-deb-notes.md" <<'NOTES'
+          Paquet **Mirivue KDE 1.0.5** pour **Kubuntu 26.04, x86-64 (amd64)**.
+          Debian 13 fournit une version de KIO trop ancienne pour ce paquet.
+
+          Téléchargez le fichier `mirivue-kde_1.0.5-1_amd64.deb`, puis exécutez dans son dossier :
+
+          ```bash
+          sudo apt install ./mirivue-kde_1.0.5-1_amd64.deb
+          ```
+
+          [Validation de la PR sur Kubuntu 26.04 avec Plasma Wayland](https://github.com/denamiel/Mirivue-kde/actions/runs/45555466641)
+          NOTES
+          gh release create kubuntu-26.04-deb-v1.0.5-1 \
+            mirivue-kde_1.0.5-1_amd64.deb SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target ebede96ae28cb68687f3d1b498ccfe941fa2371b \
+            --title "Mirivue KDE 1.0.5 pour Kubuntu 26.04 (amd64)" \
+            --notes-file "$RUNNER_TEMP/mirivue-deb-notes.md" --latest=false
+          gh release view kubuntu-26.04-deb-v1.0.5-1 --repo "$GITHUB_REPOSITORY" --json url,assets
