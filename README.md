@@ -7,6 +7,21 @@ La disponibilité des paquets dépend des publications réussies dans les dépô
 
 La portée des contrôles et leurs limites sont décrites dans [la qualification de la version 1.0](docs/VALIDATION-1.0.md).
 
+## Installer sur Kubuntu 26.04 (64 bits)
+
+1. [Téléchargez `mirivue-kde_1.0.6-1_amd64.deb`](https://github.com/denamiel/Mirivue-kde/releases/download/kubuntu-26.04-deb-v1.0.6-1/mirivue-kde_1.0.6-1_amd64.deb).
+2. Ouvrez un terminal dans le dossier qui contient le fichier, puis exécutez :
+
+   ```bash
+   sudo apt install ./mirivue-kde_1.0.6-1_amd64.deb
+   ```
+
+3. Lancez **Mirivue KDE** depuis le menu des applications ou avec `mirivue-kde`.
+
+Pour mettre à jour, téléchargez le nouveau `.deb` depuis les [Releases GitHub](https://github.com/denamiel/Mirivue-kde/releases) et installez-le de la même façon. La [page de publication du paquet](https://github.com/denamiel/Mirivue-kde/releases/tag/kubuntu-26.04-deb-v1.0.6-1) contient aussi sa somme SHA-256.
+
+Ce paquet exige KIO 6.21 ou une version ultérieure. Debian 13 fournit une version de KIO trop ancienne pour ce paquet.
+
 ## Installer sur Fedora 44 / 45 x86_64
 
 Les RPM sont disponibles sur [COPR pdenams/Mirivue-kde](https://copr.fedorainfracloud.org/coprs/pdenams/Mirivue-kde/).
