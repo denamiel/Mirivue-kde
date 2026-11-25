@@ -1,0 +1,28 @@
+name: Diagnostic GitHub Actions - demarrage minimal
+
+# Test de l'orchestrateur GitHub uniquement : aucun secret, aucun Claude.
+# Ce workflow se declenche sur sa PR sans devoir modifier main.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/diagnostic-demarrage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    name: Diagnostic - simple demarrage sur Ubuntu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Afficher uniquement des informations publiques
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Diagnostic GitHub Actions : job demarre correctement"
+          echo "Evenement : ${GITHUB_EVENT_NAME}"
+          echo "Depot : ${GITHUB_REPOSITORY}"
+          echo "OS : ${RUNNER_OS}"
+          echo "Resultat attendu : success"
