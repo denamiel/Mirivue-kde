@@ -1,3 +1,8 @@
+# 1.0.6 — 25 novembre 2026
+
+- Les menus principaux restent rattachés à la fenêtre Qt si la barre de menus est remplacée.
+- La détection d’une destination en lecture seule évite d’interroger un montage réseau depuis la boucle de commandes KIO. Si le noyau ne peut pas résoudre le chemin depuis son cache, KIO prend en charge l’opération.
+
 # 1.0.5 — 17 novembre 2026
 
 - L’action « Ouvrir » du menu contextuel affiche l’icône de l’application par défaut pour les fichiers locaux.
