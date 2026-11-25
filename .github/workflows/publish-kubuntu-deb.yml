@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ebede96ae28cb68687f3d1b498ccfe941fa2371b
+          ref: db66cda9028daca17ede67b656d534745486f991
           persist-credentials: false
       - name: Construire et vérifier l’installation et le lancement
         shell: bash
@@ -28,9 +28,9 @@ jobs:
           apt-get install -y --no-install-recommends build-essential devscripts equivs ca-certificates
           mk-build-deps --install --remove --tool 'apt-get -y --no-install-recommends' debian/control
           dpkg-buildpackage --build=binary --no-sign
-          package=../mirivue-kde_1.0.5-1_amd64.deb
+          package=../mirivue-kde_1.0.6-1_amd64.deb
           test "$(dpkg-deb -f "$package" Package)" = mirivue-kde
-          test "$(dpkg-deb -f "$package" Version)" = 1.0.5-1
+          test "$(dpkg-deb -f "$package" Version)" = 1.0.6-1
           test "$(dpkg-deb -f "$package" Architecture)" = amd64
           apt-get install -y "$package" xvfb xauth dbus-x11 imagemagick xdotool libgtk-3-bin
           mkdir -p /tmp/mirivue-validation
@@ -40,7 +40,7 @@ jobs:
           mkdir dist
           cp "$package" dist/
           cd dist
-          sha256sum mirivue-kde_1.0.5-1_amd64.deb > SHA256SUMS
+          sha256sum mirivue-kde_1.0.6-1_amd64.deb > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: mirivue-kde-kubuntu-26.04-amd64
@@ -66,21 +66,21 @@ jobs:
         run: |
           sha256sum --check SHA256SUMS
           cat > "$RUNNER_TEMP/mirivue-deb-notes.md" <<'NOTES'
-          Paquet **Mirivue KDE 1.0.5** pour **Kubuntu 26.04, x86-64 (amd64)**.
+          Paquet **Mirivue KDE 1.0.6** pour **Kubuntu 26.04, x86-64 (amd64)**.
           Debian 13 fournit une version de KIO trop ancienne pour ce paquet.
 
-          Téléchargez le fichier `mirivue-kde_1.0.5-1_amd64.deb`, puis exécutez dans son dossier :
+          Téléchargez le fichier `mirivue-kde_1.0.6-1_amd64.deb`, puis exécutez dans son dossier :
 
           ```bash
-          sudo apt install ./mirivue-kde_1.0.5-1_amd64.deb
+          sudo apt install ./mirivue-kde_1.0.6-1_amd64.deb
           ```
 
-          [Validation de la PR sur Kubuntu 26.04 avec Plasma Wayland](https://github.com/denamiel/Mirivue-kde/actions/runs/45555466641)
+          [Validation du commit publié sur Kubuntu 26.04 avec Plasma Wayland](https://github.com/denamiel/Mirivue-kde/actions/runs/45564012514)
           NOTES
-          gh release create kubuntu-26.04-deb-v1.0.5-1 \
-            mirivue-kde_1.0.5-1_amd64.deb SHA256SUMS \
+          gh release create kubuntu-26.04-deb-v1.0.6-1 \
+            mirivue-kde_1.0.6-1_amd64.deb SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
-            --target ebede96ae28cb68687f3d1b498ccfe941fa2371b \
-            --title "Mirivue KDE 1.0.5 pour Kubuntu 26.04 (amd64)" \
+            --target db66cda9028daca17ede67b656d534745486f991 \
+            --title "Mirivue KDE 1.0.6 pour Kubuntu 26.04 (amd64)" \
             --notes-file "$RUNNER_TEMP/mirivue-deb-notes.md" --latest=false
-          gh release view kubuntu-26.04-deb-v1.0.5-1 --repo "$GITHUB_REPOSITORY" --json url,assets
+          gh release view kubuntu-26.04-deb-v1.0.6-1 --repo "$GITHUB_REPOSITORY" --json url,assets
