@@ -2,7 +2,7 @@
 
 Base auditée : **1.0.0-beta.6**, main `faa828e0929dd91d3fe439a05b25048e7ebbe38b`.
 Version stable précédente : **1.0.1**, publiée.
-Candidat correctif préparé : **1.0.5**, affichage de l’icône de l’application par défaut dans le menu contextuel.
+Candidat correctif préparé : **1.0.6**, rattachement des menus Qt à la fenêtre et retrait de l’appel bloquant `statvfs()` dans le service KIO.
 La publication suit les contrôles GitHub et le circuit protégé existant.
 Bilan daté et preuves : [audit stable](docs/AUDIT-STABLE.md) et [qualification 1.0](docs/VALIDATION-1.0.md).
 
