@@ -12,15 +12,6 @@ class TestMainMenuStructure(unittest.TestCase):
         cls.media = (ROOT / 'mirivue' / 'media_ui.py').read_text(encoding='utf-8')
         cls.organization = (ROOT / 'mirivue' / 'organization.py').read_text(encoding='utf-8')
 
-    def test_top_level_menus_follow_file_manager_conventions(self):
-        self.assertIn("go_menu = self.menuBar().addMenu(tr('Aller'))", self.app)
-        self.assertIn("tools_menu = self.menuBar().addMenu(tr('Outils'))", self.app)
-        self.assertNotIn("self.menuBar().addMenu(tr('Organiser'))", self.app)
-        self.assertNotIn("self.menuBar().addMenu(tr('Opérations'))", self.app)
-        self.assertNotIn("analysis_menu = self.menuBar().addMenu(tr('Analyse'))", self.app)
-        self.assertNotIn("search_menu = self.menuBar().addMenu(tr('Recherche'))", self.app)
-        self.assertIn("self.search_action = edit_menu.addAction(tr('Rechercher…')", self.app)
-
     def test_terminal_command_uses_dolphins_tools_menu_and_shortcut(self):
         self.assertIn("tr('Shift+F4')", self.app)
         self.assertIn("self.open_terminal_action", self.app)

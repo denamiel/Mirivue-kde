@@ -1,0 +1,71 @@
+name: Validation du paquet Debian et Ubuntu
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paquet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:26.04']
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construire le paquet natif
+        shell: bash
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential devscripts equivs ca-certificates
+          mk-build-deps --install --remove --tool 'apt-get -y --no-install-recommends' debian/control
+          dpkg-buildpackage --build=binary --no-sign
+      - name: Installer le paquet et vérifier le lancement graphique
+        shell: bash
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y ../mirivue-kde_*.deb xvfb xauth dbus-x11 imagemagick xdotool libgtk-3-bin
+          mkdir -p /tmp/mirivue-validation
+          useradd -m mirivue-validation
+          chown mirivue-validation /tmp/mirivue-validation
+          runuser -u mirivue-validation -- bash -c 'cd "$HOME"; timeout 120 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- bash "$1/debian/verify-installed.sh"' bash "$GITHUB_WORKSPACE"
+      - name: Conserver les preuves de validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ strategy.job-index }}
+          path: /tmp/mirivue-validation/
+          if-no-files-found: ignore
+  bureau:
+    name: Session graphique (${{ matrix.system }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        system: [ubuntu-26.04]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer l’environnement QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils imagemagick acl ntfs-3g
+          if test -c /dev/kvm; then sudo setfacl -m "u:$(id -un):rw" /dev/kvm; fi
+      - name: Lancer et observer le bureau
+        env:
+          VALIDATION_SYSTEM: ${{ matrix.system }}
+        run: |
+          bash debian/verify-desktop-vm.sh "$VALIDATION_SYSTEM" kde
+      - name: Conserver la capture du bureau et les journaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bureau-${{ matrix.system }}
+          path: validation-vm/
+          if-no-files-found: ignore

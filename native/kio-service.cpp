@@ -6,6 +6,8 @@
 #include <QSocketNotifier>
 #include <QUrl>
 #include <QHash>
+#include <QFile>
+#include <QFileInfo>
 #include <QTimer>
 
 #include <KIO/CopyJob>
@@ -21,7 +23,61 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
+#include <linux/openat2.h>
+#include <sys/syscall.h>
 
+
+static int openCachedPath(const QString &path)
+{
+    // RESOLVE_CACHED makes the kernel return EAGAIN if lookup needs I/O
+    // or filesystem revalidation. In that case let the KIO worker proceed.
+    struct open_how how {};
+    how.flags = O_PATH | O_CLOEXEC;
+    how.resolve = RESOLVE_CACHED;
+    return static_cast<int>(syscall(SYS_openat2, AT_FDCWD, QFile::encodeName(path).constData(),
+                                    &how, sizeof(how)));
+}
+
+static bool onReadOnlyFilesystem(const QUrl &destination)
+{
+    if (!destination.isLocalFile())
+        return false;
+    const QString path = destination.toLocalFile();
+    int fd = openCachedPath(path);
+    if (fd < 0 && errno == ENOENT)
+        fd = openCachedPath(QFileInfo(path).path());
+    if (fd < 0)
+        return false;
+
+    // Use the descriptor's mount ID to account for bind mounts and symlinks.
+    // Read only kernel metadata here: statvfs() could wait on a disconnected NAS.
+    QByteArray mountId;
+    QFile descriptorInfo(QStringLiteral("/proc/self/fdinfo/%1").arg(fd));
+    if (descriptorInfo.open(QIODevice::ReadOnly)) {
+        for (QByteArray line; !(line = descriptorInfo.readLine()).isEmpty();) {
+            if (line.startsWith("mnt_id:")) {
+                mountId = line.mid(7).trimmed();
+                break;
+            }
+        }
+    }
+    close(fd);
+    if (mountId.isEmpty())
+        return false;
+
+    QFile mountInfo(QStringLiteral("/proc/self/mountinfo"));
+    if (!mountInfo.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray prefix = mountId + ' ';
+    for (QByteArray line; !(line = mountInfo.readLine()).isEmpty();) {
+        if (line.startsWith(prefix)) {
+            const auto fields = line.trimmed().split(' ');
+            return fields.value(5).split(',').contains("ro")
+                || fields.last().split(',').contains("ro");
+        }
+    }
+    return false;
+}
 
 // DeleteOrTrashJob does not implement doKill(). Keep KDE's confirmation and
 // undo recording, but propagate cancellation to its active subjob.
@@ -260,6 +316,13 @@ private:
         const QUrl destination = trashing ? QUrl(QStringLiteral("trash:/")) : url(request.value("destination"));
         if (id.isEmpty() || jobs.contains(id) || (!destinationless && (!destination.isValid() || destination.scheme().isEmpty()))) {
             write({{"event", "complete"}, {"id", id}, {"ok", false}, {"error", "Requête KIO invalide."}});
+            return;
+        }
+
+        // A read-only mount cannot be made writable by a KIO authorization prompt.
+        if (!destinationless && onReadOnlyFilesystem(destination)) {
+            write({{"event", "complete"}, {"id", id}, {"ok", false},
+                   {"error", "Le système de fichiers de destination est en lecture seule."}});
             return;
         }
 

@@ -37,6 +37,27 @@ class TestGuiActions(unittest.TestCase):
         cls.state.cleanup()
 
     def test_main_menu_contract_is_real_qt_state(self):
+        from mirivue.i18n import tr
+
+        window = self.window
+        menus = window.main_menus
+        top_level = [
+            ('file', 'Fichier'), ('edit', 'Édition'), ('view', 'Affichage'),
+            ('go', 'Aller'), ('tools', 'Outils'), ('settings', 'Configuration'),
+            ('help', 'Aide'),
+        ]
+        bar_actions = window.menuBar().actions()
+        menu_actions = [action for action in bar_actions if action.menu() is not None]
+        self.assertEqual([action.text() for action in menu_actions],
+                         [tr(title) for _, title in top_level])
+        self.assertEqual([action.menu() for action in menu_actions],
+                         [menus[key] for key, _ in top_level])
+        for key, _ in top_level:
+            self.assertIs(menus[key].parent(), window)
+        for key in ('organize', 'operations'):
+            self.assertNotIn(menus[key].menuAction(), bar_actions)
+            self.assertIn(menus[key].menuAction(), menus['tools'].actions())
+        self.assertIn(window.search_action, menus['edit'].actions())
         self.assertEqual(
             list(self.window.main_menus),
             ['file', 'edit', 'view', 'go', 'tools', 'organize', 'operations', 'settings', 'help'],

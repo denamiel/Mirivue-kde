@@ -186,7 +186,8 @@ class PlatformServices:
         for directory in self.bundled_tool_directories():
             for candidate in candidates:
                 path = directory / candidate
-                if path.is_file() and os.access(path, os.X_OK):
+                access = os.R_OK if path.suffix == '.so' else os.X_OK
+                if path.is_file() and os.access(path, access):
                     return str(path)
         for candidate in candidates:
             found = shutil.which(candidate)

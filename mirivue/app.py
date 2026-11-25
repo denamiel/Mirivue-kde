@@ -996,19 +996,23 @@ class Window(DiagnosticDialogsMixin, ContextMenuMixin, SessionMixin, ViewPolicyM
         self.settings = mirivue_settings()
         self.settings.setParent(self)
         self.setWindowTitle(tr('Dossier personnel — Mirivue'))
-        file_menu = self.menuBar().addMenu(tr('Fichier'))
-        edit_menu = self.menuBar().addMenu(tr('Édition'))
-        view_menu = self.menuBar().addMenu(tr('Affichage'))
-        go_menu = self.menuBar().addMenu(tr('Aller'))
-        tools_menu = self.menuBar().addMenu(tr('Outils'))
+        file_menu = QMenu(tr('Fichier'), self)
+        edit_menu = QMenu(tr('Édition'), self)
+        view_menu = QMenu(tr('Affichage'), self)
+        go_menu = QMenu(tr('Aller'), self)
+        tools_menu = QMenu(tr('Outils'), self)
         # Dolphin exposes one top-level Tools menu.  Mirivue-specific tools
         # remain available as clearly identified submenus instead of creating
         # additional top-level categories which alter KDE's conventional menu
         # structure.
         organize_menu = QMenu(tr('Métadonnées'), self)
         operations_menu = QMenu(tr('Opérations'), self)
-        settings_menu = self.menuBar().addMenu(tr('Configuration'))
-        help_menu = self.menuBar().addMenu(tr('Aide'))
+        settings_menu = QMenu(tr('Configuration'), self)
+        help_menu = QMenu(tr('Aide'), self)
+        # Keep the top-level menus owned by the window while KDE shares their
+        # actions with the hamburger menu and the menubar may be hidden.
+        for menu in (file_menu, edit_menu, view_menu, go_menu, tools_menu, settings_menu, help_menu):
+            self.menuBar().addMenu(menu)
         self.main_menus = dict(file=file_menu, edit=edit_menu, view=view_menu, go=go_menu,
                                tools=tools_menu, organize=organize_menu,
                                operations=operations_menu, settings=settings_menu, help=help_menu)
